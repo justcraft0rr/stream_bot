@@ -1,5 +1,6 @@
 from utils import sb, QOL
 import time as tm
+import random
 broadcasters = {
     "twitch": "justcraft_twitchy",
     "youtube": "justcraft-i8q"
@@ -13,8 +14,10 @@ admins = {
     ]
 }
 lines = [
-    "!admin hp "
-    "Does Not Exist"
+    "!admin hp ",
+    "Does Not Exist",
+    "Has Damaged The Boss By",
+    "The Boss Is Now At"
 ]
 commands = [
     "!boss",
@@ -26,8 +29,11 @@ commands = [
     "!idea",
     "!donate",
     "!serverhelpweb",
-    "!admin stop handler commands"
+    "!admin stop handler commands",
+    "!lurk",
+    "!unlurk"
 ]
+lurkers = []
 boss_active = False
 boss_hp = 0
 boss_max_hp = 1000
@@ -55,7 +61,7 @@ while running:
                     "bot",
                     f'Command "{message[1:len(message)]}" {lines[1]} {name}',
                     None,
-                platform
+                    platform
                 )
             else:
                 old_id = chat_id
@@ -85,4 +91,21 @@ while running:
                 platform
             )
     elif message == commands[1]:
-        
+        if boss_active:
+            damage = random.randint(10, 45)
+            boss_hp -= damage
+            if boss_hp <= 0:
+                sb.global_message(
+                    "bot",
+                    f"Boss Has Been Killed By {name}",
+                    None,
+                    platform
+                )
+            else:
+                part_1 = f"{name} {lines[2]} {damage}"
+                sb.global_message(
+                    "bot",
+                    f"{part_1} {lines[3]} {boss_hp}/{boss_max_hp}",
+                    None,
+                    platform
+                )
