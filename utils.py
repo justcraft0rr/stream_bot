@@ -92,16 +92,18 @@ class sb:
                 message=messagey
             )
 
-    def global_message(sender, messagey: str, announce_color):
-        sb.twitch_message(
-            sender,
-            messagey,
-            announce_color
-        )
-        sb.youtube_message(
-            sender,
-            messagey
-        )
+    def global_message(sender, messagey: str, announce_color, platform):
+        if platform == "Twitch" or platform == "Both":
+            sb.twitch_message(
+                sender,
+                messagey,
+                announce_color
+            )
+        if platform == "Youtube" or platform == "Both":
+            sb.youtube_message(
+                sender,
+                messagey
+            )
 
 
 class QOL:
