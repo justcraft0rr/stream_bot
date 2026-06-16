@@ -4,7 +4,6 @@ import pytchat
 import threading
 import asyncio
 import settings
-chat = []
 
 try:
     asyncio.get_event_loop()
@@ -23,6 +22,7 @@ class Chat(twitchcommands.Bot):
         self.chat_data = []
         self.youtube_thread = None
         self.yt_chat = None
+        self.chat = []
 
     # ---------------- UTIL ----------------
     def extract_video_id(self, text: str):
@@ -182,11 +182,6 @@ class sb:
                 sender,
                 messagey
             )
-
-
-class QOL:
-    def read_file(file):
-        return open(file, "r", encoding="utf-8").read()
 
 
 Chat().run()

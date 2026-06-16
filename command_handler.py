@@ -1,18 +1,6 @@
-from utils import sb, QOL
+from utils import sb, Chat
 import time as tm
 import random
-broadcasters = {
-    "twitch": "justcraft_twitchy",
-    "youtube": "justcraft-i8q"
-}
-admins = {
-    "twitch": [
-        "core0fcraft4",
-        "egriga",
-        "jarpi_is_seal",
-        "thelittlenoob_pc"
-    ]
-}
 lines = [
     "!admin hp ",
     "Does Not Exist",
@@ -38,42 +26,14 @@ boss_active = False
 boss_hp = 0
 boss_max_hp = 1000
 running = True
-message = QOL.read_file("commands.txt")
-parts = message.split(">")
-chat_id = parts[0][1:]
-name = parts[1][1:]
-platform = parts[2][1:]
-message = parts[3]
-old_id = chat_id
-running = True
 while running:
+    old_chat_id = len(Chat.chat)
     while True:
-        message = QOL.read_file("commands.txt")
-        parts = message.split(">")
-        chat_id = parts[0][1:]
-        name = parts[1][1:]
-        platform = parts[2][1:]
-        message = parts[3]
-        part = message[0:10]
-        if not old_id == chat_id and message[0] == "!":
-            if message not in commands and not part == lines[0]:
-                sb.global_message(
-                    "bot",
-                    f'Command "{message[1:len(message)]}" {lines[1]} {name}',
-                    None,
-                    platform
-                )
-            else:
-                old_id = chat_id
-                break
-        elif message not in commands and not part == lines[0]:
-            sb.global_message(
-                "bot",
-                f'Command "{message[1:len(message)]}" Does Not Exist {name}',
-                None,
-                platform
-            )
-        old_id = chat_id
+        if not len(Chat.chat) == old_chat_id:
+            platform = Chat.chat[len(Chat.chat)][0]
+            name = Chat.chat[len(Chat.chat)][1]
+            message = Chat.chat[len(Chat.chat)][2]
+            break
         tm.sleep(0.1)
     if message == commands[0]:
         if boss_active:
