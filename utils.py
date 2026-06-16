@@ -1,5 +1,83 @@
 import requests
-STREAMERBOT_URL = "http://127.0.0.1:7474/DoAction"
+from twitchio.ext import commands as twitchcommands
+import pytchat
+import threading
+import asyncio
+import settings
+chat = []
+
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
+
+class Chat(twitchcommands.Bot):
+    def __init__(self):
+        super().__init__(
+            token=settings.twitch_token,
+            prefix="!",
+            initial_channels=[settings.initial_channel]
+        )
+
+        self.chat_data = []
+        self.youtube_thread = None
+        self.yt_chat = None
+
+    # ---------------- UTIL ----------------
+    def extract_video_id(self, text: str):
+        text = text.strip()
+
+        if "v=" in text:
+            return text.split("v=")[1].split("&")[0]
+
+        if "youtu.be/" in text:
+            return text.split("youtu.be/")[1].split("?")[0]
+
+        return text
+
+    # ---------------- TWITCH ----------------
+    async def event_ready(self):
+        print("Twitch Connected!")
+
+    async def event_message(self, message):
+        if message.echo:
+            return
+
+        user = message.author.name
+        content = message.content
+
+        self.chat_data.append(("Twitch", user, content))
+        print(f"[TWITCH] {user}: {content}")
+
+        # ONLY YOU CAN CONTROL IT
+        if user.lower() in settings.broadcasters:
+
+            # command: !yt <link or id>
+            if content.startswith("!yt "):
+                raw = content[4:]
+                video_id = self.extract_video_id(raw)
+
+                print(f"Starting YouTube chat for: {video_id}")
+
+                self.start_youtube(video_id)
+
+    # ---------------- YOUTUBE ----------------
+    def start_youtube(self, video_id):
+        # stop old thread if needed
+        self.yt_chat = pytchat.create(video_id=video_id)
+
+        def run():
+            print("YouTube Connected!")
+
+            chat_stuff = self.chat_data
+            while self.yt_chat.is_alive():
+                for c in self.yt_chat.get().sync_items():
+                    chat_stuff.append(("Youtube", c.author.name, c.message))
+                    print(f"[YT] {c.author.name}: {c.message}")
+
+        self.youtube_thread = threading.Thread(target=run, daemon=True)
+        self.youtube_thread.start()
 
 
 class sb:
@@ -12,7 +90,7 @@ class sb:
         }
 
         requests.post(
-            STREAMERBOT_URL,
+            settings.STREAMERBOT_URL,
             json=payload
         )
 
@@ -109,3 +187,6 @@ class sb:
 class QOL:
     def read_file(file):
         return open(file, "r", encoding="utf-8").read()
+
+
+Chat().run()
