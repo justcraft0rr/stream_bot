@@ -1,3 +1,4 @@
+import obsws_python
 import requests
 from twitchio.ext import commands as twitchcommands
 import pytchat
@@ -129,12 +130,12 @@ class Chat(twitchcommands.Bot):
 
 
 class sb:
-    def run_action(action_id, **args):
+    def run_action(action_id, **kwargs):
         payload = {
             "action": {
                 "id": action_id
             },
-            "args": args
+            "args": kwargs
         }
 
         requests.post(
@@ -232,5 +233,6 @@ class sb:
             )
 
 
+obs = obsws_python.ReqClient()
 spotify = Spotify()
 Chat().run()
