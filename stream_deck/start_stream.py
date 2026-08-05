@@ -1,0 +1,4 @@
+import obsws_python as OBS_HANDLER
+obs = OBS_HANDLER.ReqClient()
+
+obs.start_stream()
