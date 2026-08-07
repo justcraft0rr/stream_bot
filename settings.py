@@ -1,6 +1,5 @@
-STREAMERBOT_URL = "http://127.0.0.1:7474/DoAction"
 # You need to get your token and replace "YOUR_TOKEN" With your new token
-twitch_token = "oauth:d99ixklaih73e0yxxe0bkwjho1varr"
+twitch_token = "oauth:8hlfq7zxdqro55emvlaig5j94yazep"
 # Set "YOUR_TWITCH_CHANNEL_NAME" to your twitch channel name
 initial_channel = "justcraft_twitchy"
 # Set "YOUR_SPOTIFY_CLIENT_ID" to your spotify client id

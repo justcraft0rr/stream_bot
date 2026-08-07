@@ -1,4 +1,4 @@
 import obsws_python as OBS_HANDLER
 obs = OBS_HANDLER.ReqClient()
 
-obs.toggle_record_pause()
+obs.set_current_program_scene('Screen 2')

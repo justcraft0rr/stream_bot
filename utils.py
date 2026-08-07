@@ -53,6 +53,10 @@ class Spotify:
         item = current["item"]
         return f"{item['name']} - {item['artists'][0]['name']}"
 
+    # 🔊 Set playback volume (0-100)
+    def set_volume(self, volume):
+        self.sp.volume(volume)
+
 
 try:
     asyncio.get_event_loop()
