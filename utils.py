@@ -7,6 +7,73 @@ import asyncio
 import settings
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
+import time as tm
+
+
+class Timer():
+    def time_to_ms(time: list):
+        return (
+            time[0] + 
+            time[1] * 100 + 
+            time[2] * 100 * 60 + 
+            time[3] * 100 * 60 * 60 + 
+            time[4] * 100 * 60 * 60 * 24 + 
+            time[5] * 100 * 60 * 60 * 24 * 365
+        )
+    def convert_milliseconds(total_milliseconds: int):
+        second = 100
+        minute = second * 60
+        hour = minute * 60
+        day = hour * 24
+        year = day * 365
+
+        years = total_milliseconds // year
+        total_milliseconds %= year
+
+        days = total_milliseconds // day
+        total_milliseconds %= day
+
+        hours = total_milliseconds // hour
+        total_milliseconds %= hour
+
+        minutes = total_milliseconds // minute
+        total_milliseconds %= minute
+
+        seconds = total_milliseconds // second
+        milliseconds = total_milliseconds % second
+
+        return [milliseconds, seconds, minutes, hours, days, years]
+    def format_time(time: list):
+        # [milliseconds, seconds, minutes, hours, days, years]
+
+        highest = next(
+            (i for i in range(len(time) - 1, 1, -1) if time[i] != 0),
+            1
+        )
+
+        parts = time[:highest + 1][::-1]
+
+        return ":".join(f"{x:02}" for x in parts)
+    def countdown(self, start: list):
+        self.time = start
+        self.formatted_time = str(self.format_time(self.time))
+        while True:
+            if self.time == [0, 0, 0, 0, 0, 0]:
+                break
+            tm.sleep(0.01)
+            self.time = self.convert_milliseconds(self.time_to_ms(self.time)-1)
+            self.formatted_time = self.format_time(self.time)
+        print('Countdown Done')
+    def timer(self, end: list):
+        self.time = [0, 0, 0, 0, 0, 0]
+        self.formatted_time = str(self.format_time(self.time))
+        while True:
+            if self.time == end:
+                break
+            tm.sleep(0.01)
+            self.time = self.convert_milliseconds(self.time_to_ms(self.time)+1)
+            self.formatted_time = self.format_time(self.time)
+        print('Timer Done')
 
 
 class Spotify:
@@ -239,4 +306,5 @@ class sb:
 
 obs = obsws_python.ReqClient()
 spotify = Spotify()
+timer = Timer()
 Chat().run()
