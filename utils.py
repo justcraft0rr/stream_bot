@@ -11,6 +11,11 @@ import time as tm
 
 
 class Timer():
+    def __init__(self):
+        self.done = None
+        self.time = [0, 0, 0, 0, 0, 0]
+        self.formatted_time = '00:00'
+    @staticmethod
     def time_to_ms(time: list):
         return (
             time[0] + 
@@ -20,6 +25,7 @@ class Timer():
             time[4] * 100 * 60 * 60 * 24 + 
             time[5] * 100 * 60 * 60 * 24 * 365
         )
+    @staticmethod
     def convert_milliseconds(total_milliseconds: int):
         second = 100
         minute = second * 60
@@ -43,6 +49,7 @@ class Timer():
         milliseconds = total_milliseconds % second
 
         return [milliseconds, seconds, minutes, hours, days, years]
+    @staticmethod
     def format_time(time: list):
         # [milliseconds, seconds, minutes, hours, days, years]
 
@@ -55,25 +62,31 @@ class Timer():
 
         return ":".join(f"{x:02}" for x in parts)
     def countdown(self, start: list):
-        self.time = start
-        self.formatted_time = str(self.format_time(self.time))
-        while True:
-            if self.time == [0, 0, 0, 0, 0, 0]:
-                break
-            tm.sleep(0.01)
-            self.time = self.convert_milliseconds(self.time_to_ms(self.time)-1)
-            self.formatted_time = self.format_time(self.time)
-        print('Countdown Done')
+        def run():
+            self.done = False
+            self.time = start
+            self.formatted_time = str(self.format_time(self.time))
+            while True:
+                if self.time == [0, 0, 0, 0, 0, 0]:
+                    break
+                tm.sleep(0.01)
+                self.time = self.convert_milliseconds(self.time_to_ms(self.time)-1)
+                self.formatted_time = self.format_time(self.time)
+            self.done = True
+        threading.Thread(target=run, daemon=True).start()
     def timer(self, end: list):
-        self.time = [0, 0, 0, 0, 0, 0]
-        self.formatted_time = str(self.format_time(self.time))
-        while True:
-            if self.time == end:
-                break
-            tm.sleep(0.01)
-            self.time = self.convert_milliseconds(self.time_to_ms(self.time)+1)
-            self.formatted_time = self.format_time(self.time)
-        print('Timer Done')
+        def run():
+            self.done = False
+            self.time = [0, 0, 0, 0, 0, 0]
+            self.formatted_time = str(self.format_time(self.time))
+            while True:
+                if self.time == end:
+                    break
+                tm.sleep(0.01)
+                self.time = self.convert_milliseconds(self.time_to_ms(self.time)+1)
+                self.formatted_time = self.format_time(self.time)
+            self.done = True
+        threading.Thread(target=run, daemon=True).start()
 
 
 class Spotify:
@@ -304,7 +317,8 @@ class sb:
             )
 
 
-obs = obsws_python.ReqClient()
-spotify = Spotify()
-timer = Timer()
-Chat().run()
+if __name__ == '__main__':
+    obs = obsws_python.ReqClient()
+    spotify = Spotify()
+    timer = Timer()
+    Chat().run()
