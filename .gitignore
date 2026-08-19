@@ -1,6 +1,3 @@
 .cache
 __pycache__
 .github
-settings.py
-stream_deck/settings.py
-

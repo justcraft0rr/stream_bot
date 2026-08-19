@@ -1,6 +1,9 @@
 from utils import Chat
 import time as tm
+import asyncio
 def start():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     Chat().run()
     lines = [
         "!admin hp ",
@@ -22,7 +25,7 @@ def start():
         "!lurk",
         "!unlurk"
     ]
-    lurkers = []
+    lurkers = {}
     boss_active = False
     boss_hp = 0
     boss_max_hp = 1000
