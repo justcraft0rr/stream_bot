@@ -1,6 +1,4 @@
 import os
-import obsws_python
-import requests
 from twitchio.ext import commands as twitchcommands
 import pytchat
 import threading
