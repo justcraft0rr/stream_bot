@@ -98,7 +98,7 @@ for event in keyboard.read_loop():
         if event.code == ecodes.KEY_KPMINUS:
             break
         elif event.code == ecodes.KEY_KPSLASH:
-            var = obs.get_current_program_scene()
+            var = obs.get_current_program_scene().current_program_scene_name
             obs.set_current_program_scene('BRB')
             for event in keyboard.read_loop():
                 if event.type == ecodes.EV_KEY and event.value == 1:
