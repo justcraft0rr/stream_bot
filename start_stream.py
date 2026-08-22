@@ -200,7 +200,7 @@ class Chat(twitchcommands.Bot):
                 self.start_youtube(video_id)
     
     def send_message(self, message):
-        channel = self.get_channel(settings.initial_channel)
+        channel = self.get_channel(os.getenv('twitch_channel'))
 
         if channel:
             asyncio.run_coroutine_threadsafe(
@@ -523,6 +523,14 @@ def process_command(username, message):
                         f"for {command_name}: {e}"
                     )
             return
+    for action in actions:
+        try:
+            action()
+        except Exception as e:
+            print(
+                f"Error running action "
+                f"for {command_name}: {e}"
+            )
 
 
 # Setup
