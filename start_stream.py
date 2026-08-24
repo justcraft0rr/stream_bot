@@ -569,22 +569,6 @@ spotify.set_volume(70)
 
 # Main Loop
 for event in keyboard.read_loop():
-    if not chat.chat_data:
-        tm.sleep(0.1)
-        continue
-    platform, username, message = (
-        chat.chat_data.pop(0)
-    )
-    print(
-        f"[COMMAND] "
-        f"{platform} | "
-        f"{username} | "
-        f"{message}"
-    )
-    process_command(
-        username,
-        message
-    )
     if event.type == ecodes.EV_KEY and event.value == 1:
         if event.code == ecodes.KEY_KPMINUS:
             break
