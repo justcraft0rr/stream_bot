@@ -5,7 +5,8 @@ import re
 import json
 from datetime import datetime
 from twitchio.ext import commands, eventsub
-from flask import Flask, request
+from flask import request
+import pytchat
 class TwithBot(commands.Bot):
     def __init__(self, **kwargs):
         self.requirements = {
@@ -13,7 +14,8 @@ class TwithBot(commands.Bot):
             'twitch_token_id': kwargs.get('twitch_token_id'),
             'twitch_token_secret': kwargs.get('twitch_token_secret'),
             'twitch_broadcaster': kwargs.get('twitch_broadcaster'),
-            'twitch_bot': kwargs.get('twitch_bot')
+            'twitch_bot': kwargs.get('twitch_bot'),
+            'flask': kwargs.get('flask')
         }
         self.refresh_twitch_token(
             self.requirements['twitch_token_id'],
@@ -35,7 +37,7 @@ class TwithBot(commands.Bot):
         self.stream_events = {}
         self.eventsub = eventsub.EventSubWSClient(self)
         self.connector = '≋'
-        self.flask = Flask(__name__)
+        self.flask = self.requirements['flask']
         self.flask.add_url_rule(
             '/stream-info',
             'stream-info',
@@ -231,17 +233,18 @@ class TwithBot(commands.Bot):
     async def live_handle(self):
         old_state = await self.is_live()
         while True:
-            state = await self.is_live()
-            if not old_state == state and not state:
-                json.dump(
-                    self.stream_events,
-                    open(f'{datetime.now().strftime(f'%Y-%m-%d{self.connector}%H:%M:%S')}{self.connector}chat{self.connector}live.json', 'w'),
-                    indent=4
-                )
-                self.stream_events = {}
-                self.stream_id = 0
-            old_state = state
-            await asyncio.sleep(30)
+            if self.ready:
+                state = await self.is_live()
+                if not old_state == state and not state:
+                    json.dump(
+                        self.stream_events,
+                        open(f'{datetime.now().strftime(f'%Y-%m-%d{self.connector}%H:%M:%S')}{self.connector}chat{self.connector}live.json', 'w'),
+                        indent=4
+                    )
+                    self.stream_events = {}
+                    self.stream_id = 0
+                old_state = state
+                await asyncio.sleep(30)
     
     async def get_followers(self):
         follows = await self.fetch_users_follows(
@@ -474,3 +477,52 @@ class TwithBot(commands.Bot):
         data = request.json
         username = data.get('username')
         self.remove_vip(username)
+
+class YoutubeBot:
+    def __init__(self, **kwargs):
+        self.requirements = {
+            'youtube_channel': kwargs.get('youtube_channel'),
+            'flask': kwargs.get('flask')
+        }
+
+        self.chat = pytchat.create(
+            video_id=self.get_stream()
+        )
+        asyncio.create_task(self.live_handle())
+        self.stream_events = {}
+        self.stream_id = 0
+        self.flask = self.requirements['flask']
+    
+    def get_stream(self):
+        channel = self.requirements['youtube_channel']
+        if not channel.startswith('http'):
+            channel = f'https://www.youtube.com/@{channel}'
+        response = requests.get(
+            channel,
+            headers={
+                'User-Agent': 'Mozilla/5.0'
+            }
+        )
+        response.raise_for_status()
+        match = re.search(
+            r'"videoId":"([A-Za-z0-9_-]{11})"',
+            response.text
+        )
+        if not match:
+            return None
+        return match.group(1)
+    
+    def is_live(self):
+        return self.get_stream() is not None
+    
+    async def live_handle(self):
+        while self.chat.is_alive():
+            for message in self.chat.get().sync_items():
+                self.stream_events[self.stream_id+1] = {
+                    'event': 'message',
+                    'username': message.author.name,
+                    'message': message.message
+                }
+                self.stream_id += 1
+
+            await asyncio.sleep(1)
