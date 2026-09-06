@@ -5,6 +5,7 @@ import re
 import json
 from datetime import datetime
 from twitchio.ext import commands, eventsub
+from flask import Flask, request
 class TwithBot(commands.Bot):
     def __init__(self, **kwargs):
         self.requirements = {
@@ -34,7 +35,102 @@ class TwithBot(commands.Bot):
         self.stream_events = {}
         self.eventsub = eventsub.EventSubWSClient(self)
         self.connector = '≋'
+        self.flask = Flask(__name__)
+        self.flask.add_url_rule(
+            '/stream-info',
+            'stream-info',
+            self.stream
+        )
+        self.flask.add_url_rule(
+            '/status',
+            'status',
+            self.status
+        )
+        self.flask.add_url_rule(
+            '/start',
+            'start',
+            self.run
+        )
+        self.flask.add_url_rule(
+            "/stop",
+            "stop",
+            self.stop,
+            methods=["POST"]
+        )
+        self.flask.add_url_rule(
+            "/reload",
+            "reload",
+            self.reload,
+            methods=["POST"]
+        )
+        self.flask.add_url_rule(
+            "/user/<username>",
+            "user",
+            self.flask_user,
+            methods=["GET"]
+        )
+        self.flask.add_url_rule(
+            '/events',
+            'events',
+            self.events
+        )
+        self.flask.add_url_rule(
+            "/send_message",
+            "send_message",
+            self.flask_send_message,
+            methods=["POST"]
+        )
+        self.flask.add_url_rule(
+            "/ban",
+            "ban",
+            self.flask_ban,
+            methods=["POST"]
+        )
+        self.flask.add_url_rule(
+            "/unban",
+            "unban",
+            self.flask_unban,
+            methods=["POST"]
+        )
+        self.flask.add_url_rule(
+            "/timeout",
+            "timeout",
+            self.flask_send_message,
+            methods=["POST"]
+        )
+        self.flask.add_url_rule(
+            "/create-clip",
+            "create-clip",
+            self.flask_create_clip,
+            methods=["POST"]
+        )
+        self.flask.add_url_rule(
+            "/add-moderator",
+            "add-moderator",
+            self.flask_add_moderator,
+            methods=["POST"]
+        )
+        self.flask.add_url_rule(
+            "/remove-moderator",
+            "remove-moderator",
+            self.flask_remove_moderator,
+            methods=["POST"]
+        )
+        self.flask.add_url_rule(
+            "/add-vip",
+            "add-vip",
+            self.flask_vip,
+            methods=["POST"]
+        )
+        self.flask.add_url_rule(
+            "/remove-vip",
+            "remove-vip",
+            self.flask_remove_vip,
+            methods=["POST"]
+        )
     
+    # Main Stuff
+
     def run(self):
         super().run()
     
@@ -155,3 +251,226 @@ class TwithBot(commands.Bot):
         )
 
         return follows
+    
+    async def get_user(self, username):
+        return await self.fetch_user(username)
+    
+    async def get_channel(self):
+        return await self.fetch_channel(
+            self.requirements['twitch_broadcaster']
+        )
+    
+    async def ban(self, username, reason=None):
+        user = await self.get_user(username)
+
+        await self.ban_user(
+            broadcaster=self.requirements['twitch_broadcaster'],
+            moderator=self.requirements['twitch_bot'],
+            user=user.id,
+            reason=reason
+        )
+    
+    async def unban(self, username):
+        user = await self.get_user(username)
+
+        await self.unban_user(
+            broadcaster=self.requirements['twitch_broadcaster'],
+            moderator=self.requirements['twitch_bot'],
+            user=user.id
+        )
+    
+    async def timeout(self, username, duration, reason=None):
+        user = await self.get_user(username)
+
+        await self.ban_user(
+            broadcaster=self.requirements['twitch_broadcaster'],
+            moderator=self.requirements['twitch_bot'],
+            user=user.id,
+            duration=duration,
+            reason=reason
+        )
+    
+    async def get_moderators(self):
+        return await self.fetch_moderators(
+            broadcaster=self.requirements['twitch_broadcaster']
+        )
+    
+    async def add_moderator(self, username):
+        user = await self.get_user(username)
+
+        return await self.add_channel_moderator(
+            broadcaster=self.requirements['twitch_broadcaster'],
+            user=user.id
+        )
+    
+    async def remove_moderator(self, username):
+        user = await self.get_user(username)
+
+        return await self.remove_channel_moderator(
+            broadcaster=self.requirements['twitch_broadcaster'],
+            user=user.id
+        )
+    
+    async def get_vips(self):
+        return await self.fetch_vips(
+            broadcaster=self.requirements['twitch_broadcaster']
+        )
+    
+    async def add_vip(self, username):
+        user = await self.get_user(username)
+
+        return await self.add_channel_vip(
+            broadcaster=self.requirements['twitch_broadcaster'],
+            user=user.id
+        )
+    
+    async def remove_vip(self, username):
+        user = await self.get_user(username)
+
+        return await self.remove_channel_vip(
+            broadcaster=self.requirements['twitch_broadcaster'],
+            user=user.id
+        )
+    
+    async def make_clip(self):
+        return await self.create_clip(
+            broadcaster=self.requirements['twitch_broadcaster']
+        )
+    
+    async def make_prediction(self, title, outcomes, duration):
+        return await self.create_prediction(
+            broadcaster=self.requirements['twitch_broadcaster'],
+            title=title,
+            outcomes=outcomes,
+            prediction_window=duration
+        )
+    
+    async def make_poll(self, title, choices, duration):
+        return await self.create_poll(
+            broadcaster=self.requirements['twitch_broadcaster'],
+            title=title,
+            choices=choices,
+            duration=duration
+        )
+    
+    def stop(self):
+        asyncio.run_coroutine_threadsafe(
+            self.close(),
+            self.loop
+        )
+    
+    def reload(self):
+        async def reload():
+            await self.close()
+            await self.connect()
+
+        asyncio.run_coroutine_threadsafe(
+            reload(),
+            self.loop
+        ).result()
+    
+    # Flask Stuff
+
+    def stream(self):
+        stream = asyncio.run_coroutine_threadsafe(
+            self.get_stream(),
+            self.loop
+        ).result()
+
+        if stream is None:
+            return {"live": False}
+
+        return {
+            "live": True,
+            "id": stream.id,
+            "user_id": stream.user_id,
+            "user_name": stream.user_name,
+            "game_id": stream.game_id,
+            "game_name": stream.game_name,
+            "title": stream.title,
+            "viewer_count": stream.viewer_count,
+            "started_at": stream.started_at.isoformat(),
+            "language": stream.language,
+            "thumbnail_url": stream.thumbnail_url,
+            "type": stream.type
+        }
+    
+    def status(self):
+        return {
+            'ready': self.ready,
+            'live': self.is_live()
+        }
+    
+    def events(self):
+        return self.stream_events
+    
+    def flask_user(self, username):
+        user = asyncio.run_coroutine_threadsafe(
+            self.get_user(username),
+            self.loop
+        ).result()
+
+        if user is None:
+            return {"error": "User not found"}, 404
+
+        return {
+            "id": user.id,
+            "username": user.name,
+            "display_name": user.display_name,
+            "description": user.description,
+            "profile_image_url": user.profile_image_url,
+            "offline_image_url": user.offline_image_url,
+            "created_at": user.created_at.isoformat(),
+            "view_count": user.view_count
+        }
+    
+    def flask_send_message(self):
+        data = request.json
+
+        message = data.get("message")
+
+        if not message:
+            return {"error": "Missing message"}, 400
+
+        self.send_message(message)
+    
+    def flask_ban(self):
+        data = request.json
+        username = data.get('username')
+        reason = data.get('reason')
+        self.ban(username, reason)
+    
+    def flask_unban(self):
+        data = request.json
+        username = data.get('username')
+        self.unban(username)
+    
+    def flask_timeout(self):
+        data = request.json
+        username = data.get('username')
+        duration = data.get('duration')
+        reason = data.get('reason')
+        self.timeout(username, duration, reason)
+    
+    def flask_create_clip(self):
+        self.make_clip()
+    
+    def flask_add_moderator(self):
+        data = request.json
+        username = data.get('username')
+        self.add_moderator(username)
+    
+    def flask_vip(self):
+        data = request.json
+        username = data.get('username')
+        self.add_vip(username)
+    
+    def flask_remove_moderator(self):
+        data = request.json
+        username = data.get('username')
+        self.remove_moderator(username)
+    
+    def flask_remove_vip(self):
+        data = request.json
+        username = data.get('username')
+        self.remove_vip(username)
