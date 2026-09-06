@@ -1,8 +1,11 @@
-from obsws_python import ReqClient as OBS_HANDLER
 from evdev import InputDevice, ecodes
 from spotipy.oauth2 import SpotifyOAuth
+from openai import OpenAI
+from dotenv import load_dotenv
 from twitchio.ext import commands as twitchcommands
+from obsws_python import ReqClient as OBS_HANDLER
 import time as tm
+import twitchio
 import settings
 import spotipy
 import threading
@@ -10,6 +13,26 @@ import asyncio
 import os
 import pytchat
 import random
+import requests
+import re
+
+
+class GPT:
+    def __init__(self, api_key):
+        self.client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key
+        )
+
+    def ask(self, prompt):
+        response = self.client.chat.completions.create(
+            model="openai/gpt-5",
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        return response.choices[0].message.content
 
 
 class Timer():
@@ -148,6 +171,7 @@ except RuntimeError:
 
 class Chat(twitchcommands.Bot):
     def __init__(self):
+        self.refresh_twitch_token()
         super().__init__(
             token=f'oauth:{os.getenv('twitch_token')}',
             prefix="!",
@@ -155,9 +179,9 @@ class Chat(twitchcommands.Bot):
         )
 
         self.chat_data = []
+        self.stream_events = []
         self.youtube_thread = None
         self.yt_chat = None
-        self.chat = []
         self.ready = False
 
     # ---------------- UTIL ----------------
@@ -172,10 +196,66 @@ class Chat(twitchcommands.Bot):
 
         return text
 
+    def refresh_twitch_token(self):
+        client_id = os.getenv("twitch_client_id")
+        client_secret = os.getenv("twitch_client_secret")
+        refresh_token = os.getenv("twitch_refresh_token")
+        if not client_id or not client_secret or not refresh_token:
+            raise RuntimeError(
+                "Missing twitch_client_id, twitch_client_secret, or twitch_refresh_token"
+            )
+
+        response = requests.post(
+            "https://id.twitch.tv/oauth2/token",
+            params={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            },
+        )
+
+        response.raise_for_status()
+        data = response.json()
+
+        access_token = data["access_token"]
+        new_refresh_token = data.get("refresh_token", refresh_token)
+
+        # Read .bashrc
+        bashrc = os.path.expanduser("~/.bashrc")
+
+        with open(bashrc, "r") as f:
+            content = f.read()
+
+        # Update ONLY the token variables
+        content = re.sub(
+            r"^export twitch_token=.*$",
+            f'export twitch_token="{access_token}"',
+            content,
+            flags=re.MULTILINE,
+        )
+
+        content = re.sub(
+            r"^export twitch_refresh_token=.*$",
+            f'export twitch_refresh_token="{new_refresh_token}"',
+            content,
+            flags=re.MULTILINE,
+        )
+
+        # Write .bashrc back
+        with open(bashrc, "w") as f:
+            f.write(content)
+
+        return access_token
+
     # ---------------- TWITCH ----------------
     async def event_ready(self):
         print("Twitch Connected!")
         self.ready = True
+    
+    async def event_follow(self, payload):
+        username = payload.user.name
+        self.stream_events.append(('Twitch', 'Follow', username))
 
     async def event_message(self, message):
         if message.echo:
@@ -226,6 +306,7 @@ class Chat(twitchcommands.Bot):
         self.youtube_thread.start()
 
 
+load_dotenv()
 boss_active = False
 boss_hp = 0
 boss_max_hp = 1000
@@ -242,295 +323,70 @@ ideas = [
     "Memory Matching",
     "Sword Duel"
 ]
-name = ""
-args = []
 obs = OBS_HANDLER()
 timer = Timer()
-keyboard = InputDevice('/dev/input/event3')
+keyboard = InputDevice('/dev/input/event2')
 spotify = Spotify()
 chat = Chat()
+gpt = GPT(os.environ['gpt_api_key'])
 
 
-def boss_handler(action, value=None):
-    global boss_active
-    global boss_hp
-    if action == "hp":
-        boss_hp = max(0, min(value, boss_max_hp))
-    elif action == "spawn":
-        boss_active = True
-        boss_hp = boss_max_hp
-    elif action == "kill":
-        boss_active = False
-        boss_hp = 0
-
-
-def attack_boss():
-    global boss_hp
-    damage = random.randint(25, 45)
-    old_hp = boss_hp
-    boss_hp -= damage
-    if boss_hp <= 0:
-        boss_hp = 0
-        chat.send_message(
-            f"💀 {name} dealt {damage} damage and defeated the boss!"
-        )
-        boss_handler("kill")
-    else:
-        chat.send_message(
-            f"⚔️ {name} dealt {damage} damage! "
-            f"Boss HP: {old_hp} -> {boss_hp}/{boss_max_hp}"
-        )
-
-
-def is_admin(username):
-    username = username.lower()
-    admins = [
-        user.lower()
-        for user in settings.admins
-    ]
-    broadcasters = [
-        user.lower()
-        for user in settings.broadcasters
-    ]
-    return (
-        username in admins
-        or username in broadcasters
-    )
-
-
-def has_exactly_one_argument():
-    return len(args) == 1
-
-
-def argument_is_integer():
-    if len(args) != 1:
-        return False
-    try:
-        int(args[0])
-        return True
-    except ValueError:
-        return False
-
-
-def hp_is_valid():
-    if not argument_is_integer():
-        return False
-    hp = int(args[0])
-    return 0 <= hp <= boss_max_hp
-
-
-commands = {
-    "!boss": {
-        "checks": [
-            lambda: boss_active
-        ],
-        "fail": lambda: chat.send_message(
-            f"Boss Isn't Available, {name}!"
-        ),
-        "actions": [
-            lambda: chat.send_message(
-                f"Boss Health: "
-                f"{boss_hp}/{boss_max_hp}"
-            )
-        ]
-    },
-    "!attack": {
-        "checks": [
-            lambda: boss_active
-        ],
-        "fail": lambda: chat.send_message(
-            f"Boss Isn't Available, {name}!"
-        ),
-        "actions": [
-            lambda: attack_boss()
-        ]
-    },
-    "!admin spawn": {
-        "checks": [
-            lambda: not boss_active,
-            lambda: is_admin(name)
-        ],
-        "fail": lambda: chat.send_message(
-            f"Boss Is Already Spawned "
-            f"Or You Aren't An Admin, {name}!"
-        ),
-        "actions": [
-            lambda: boss_handler("spawn"),
-            lambda: chat.send_message(
-                f"Boss Spawned By {name}!"
-            )
-        ]
-    },
-    "!admin kill": {
-        "checks": [
-            lambda: boss_active,
-            lambda: is_admin(name)
-        ],
-        "fail": lambda: chat.send_message(
-            f"Boss Is Already Dead "
-            f"Or You Aren't An Admin, {name}!"
-        ),
-        "actions": [
-            lambda: boss_handler("kill"),
-            lambda: chat.send_message(
-                f"Boss Killed By {name}!"
-            )
-        ]
-    },
-    "!admin heal": {
-        "checks": [
-            lambda: boss_active,
-            lambda: is_admin(name)
-        ],
-        "fail": lambda: chat.send_message(
-            f"Boss Is Dead "
-            f"Or You Aren't An Admin, {name}!"
-        ),
-        "actions": [
-            lambda: boss_handler(
-                "hp",
-                boss_max_hp
-            ),
-            lambda: chat.send_message(
-                f"Boss Healed To "
-                f"{boss_max_hp} HP!"
-            )
-        ]
-    },
-    "!admin hp": {
-        "checks": [
-            lambda: boss_active,
-            lambda: is_admin(name),
-            lambda: has_exactly_one_argument(),
-            lambda: hp_is_valid()
-        ],
-        "fail": lambda: chat.send_message(
-            f"Usage: !admin hp <0-{boss_max_hp}> "
-            f"(boss must be alive and you must be an admin)"
-        ),
-        "actions": [
-            lambda: boss_handler(
-                "hp",
-                int(args[0])
-            ),
-            lambda: chat.send_message(
-                f"Boss HP Set To "
-                f"{boss_hp}/{boss_max_hp} "
-                f"By {name}!"
-            )
-        ]
-    },
-    "!idea": {
-        "checks": [],
-        "fail": None,
-        "actions": [
-            lambda: chat.send_message(
-                f"Justcraft Has To Make A {ideas[random.randrange(1, len(ideas))]} Game Cuz Of {name}"
-            )
-        ]
-    },
-    "!donate": {
-        "checks": [],
-        "fail": None,
-        "actions": [chat.send_message(f'{name} Here Is My Donate Link: https://streamelements.com/justcraft_twitchy/tip')]
-    },
-    "!serverhelpweb": {
-        "checks": [],
-        "fail": None,
-        "actions": [chat.send_message(f'{name} Here Is My Website: https://mcserverhelp.my.canva.site/')]
-    },
-    "!lurk": {
-        "checks": [],
-        "fail": None,
-        "actions": [
-            lambda: lurkers.__setitem__(
-                name.lower(),
-                True
-            ),
-            lambda: chat.send_message(
-                f"{name} is now lurking!"
-            )
-        ]
-    },
-    "!unlurk": {
-        "checks": [],
-        "fail": None,
-        "actions": [
-            lambda: lurkers.pop(
-                name.lower(),
-                None
-            ),
-            lambda: chat.send_message(
-                f"Welcome back, {name}!"
-            )
-        ]
-    }
-}
-
-
-def process_command(username, message):
-    global name
-    global args
-    name = username
-    message = message.strip()
-    if not message.startswith("!"):
-        return
-    command_name = None
-    sorted_commands = sorted(
-        commands.keys(),
-        key=len,
-        reverse=True
-    )
-    for possible_command in sorted_commands:
-        if (
-            message.lower() == possible_command.lower()
-            or
-            message.lower().startswith(
-                possible_command.lower() + " "
-            )
-        ):
-            command_name = possible_command
+def command_handler():
+    while True:
+        try:
+            if thread1 == None:
+                pass
             break
-    if command_name is None:
-        return
-    argument_text = message[
-        len(command_name):
-    ].strip()
-    if argument_text:
-        args = argument_text.split()
-    else:
-        args = []
-    command = commands[command_name]
-    checks = command["checks"]
-    fail = command["fail"]
-    actions = command["actions"]
-    for check in checks:
-        try:
-            result = check()
-        except Exception as e:
-            print(
-                f"Error checking "
-                f"{command_name}: {e}"
-            )
-            return
-        if not result:
-            if fail is not None:
-                try:
-                    fail()
-                except Exception as e:
-                    print(
-                        f"Error running fail "
-                        f"for {command_name}: {e}"
-                    )
-            return
-    for action in actions:
-        try:
-            action()
-        except Exception as e:
-            print(
-                f"Error running action "
-                f"for {command_name}: {e}"
-            )
+        except Exception:
+            pass
+    old_chat_id = len(chat.chat_data)
+    while True:
+        while True:
+            if old_chat_id == len(chat.chat_data):
+                platform = chat.chat_data[len(chat.chat_data)][0]
+                user = chat.chat_data[len(chat.chat_data)][1]
+                message = chat.chat_data[len(chat.chat_data)][2]
+                break
+            old_chat_id = len(chat.chat_data)
+        if user not in settings.admins and user not in settings.broadcasters:
+            if message == '!boss':
+                if boss_active:
+                    chat.send_message(f'Boss Health: {boss_hp}/{boss_max_hp}')
+                else:
+                    chat.send_message(f"Boss Isn't Available")
+            elif message == '!attack':
+                if boss_active:
+                    damage = random.randint(25, 40)
+                    old_hp = boss_hp
+                    boss_hp -= damage
+                    chat.send_message(f'Boss Got Damaged By {damage} HP Was At {old_hp}/{boss_max_hp} Now At {boss_hp}/{boss_max_hp}')
+                else:
+                    chat.send_message("Boss Isn't Available")
+        elif user in settings.admins or user in settings.broadcasters:
+            if message == '!admin spawn':
+                if boss_active:
+                    chat.send_message('Boss Is Already Active')
+                else:
+                    chat.send_message(f'Boss Spawned By {user}')
+                    boss_active = True
+            elif message == '!admin kill':
+                if boss_active:
+                    chat.send_message(f'Boss Got Killed By {user}')
+                    boss_active = False
+                    boss_hp = boss_max_hp
+                else:
+                    chat.send_message('Boss Is Not Active')
+            elif message == '!admin heal':
+                if boss_active:
+                    if boss_hp == boss_max_hp:
+                        chat.send_message('Boss Is Already Full Health')
+                    else:
+                        chat.send_message(f'Boss Got Healed Back To {boss_max_hp}')
+                        boss_hp = boss_max_hp
+                else:
+                    chat.send_message('Boss Is Not Active')
+            elif message[0:10] == '!admin hp ':
+                new_hp = message[10:len(message)]
 
 
 # Setup
