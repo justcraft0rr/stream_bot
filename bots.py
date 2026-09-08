@@ -39,96 +39,96 @@ class TwithBot(commands.Bot):
         self.connector = '≋'
         self.flask = self.requirements['flask']
         self.flask.add_url_rule(
-            '/stream-info',
+            '/twitch/stream-info',
             'stream-info',
             self.stream
         )
         self.flask.add_url_rule(
-            '/status',
+            '/twitch/status',
             'status',
             self.status
         )
         self.flask.add_url_rule(
-            '/start',
+            '/twitch/start',
             'start',
             self.run
         )
         self.flask.add_url_rule(
-            "/stop",
-            "stop",
+            '/twitch/stop',
+            'stop',
             self.stop,
-            methods=["POST"]
+            methods=['POST']
         )
         self.flask.add_url_rule(
-            "/reload",
-            "reload",
+            '/twitch/reload',
+            'reload',
             self.reload,
-            methods=["POST"]
+            methods=['POST']
         )
         self.flask.add_url_rule(
-            "/user/<username>",
-            "user",
+            '/twitch/user/<username>',
+            'user',
             self.flask_user,
-            methods=["GET"]
+            methods=['GET']
         )
         self.flask.add_url_rule(
-            '/events',
+            '/twitch/events',
             'events',
             self.events
         )
         self.flask.add_url_rule(
-            "/send_message",
-            "send_message",
+            '/twitch/send_message',
+            'send_message',
             self.flask_send_message,
-            methods=["POST"]
+            methods=['POST']
         )
         self.flask.add_url_rule(
-            "/ban",
-            "ban",
+            '/twitch/ban',
+            'ban',
             self.flask_ban,
-            methods=["POST"]
+            methods=['POST']
         )
         self.flask.add_url_rule(
-            "/unban",
-            "unban",
+            '/twitch/unban',
+            'unban',
             self.flask_unban,
-            methods=["POST"]
+            methods=['POST']
         )
         self.flask.add_url_rule(
-            "/timeout",
-            "timeout",
+            '/twitch/timeout',
+            'timeout',
             self.flask_send_message,
-            methods=["POST"]
+            methods=['POST']
         )
         self.flask.add_url_rule(
-            "/create-clip",
-            "create-clip",
+            '/twitch/create-clip',
+            'create-clip',
             self.flask_create_clip,
-            methods=["POST"]
+            methods=['POST']
         )
         self.flask.add_url_rule(
-            "/add-moderator",
-            "add-moderator",
+            '/twitch/add-moderator',
+            'add-moderator',
             self.flask_add_moderator,
-            methods=["POST"]
+            methods=['POST']
         )
         self.flask.add_url_rule(
-            "/remove-moderator",
-            "remove-moderator",
+            '/twitch/remove-moderator',
+            'remove-moderator',
             self.flask_remove_moderator,
-            methods=["POST"]
+            methods=['POST']
         )
         self.flask.add_url_rule(
-            "/add-vip",
-            "add-vip",
+            '/twitch/add-vip',
+            'add-vip',
             self.flask_vip,
-            methods=["POST"]
+            methods=['POST']
         )
         self.flask.add_url_rule(
-            "/remove-vip",
-            "remove-vip",
+            '/twitch/remove-vip',
+            'remove-vip',
             self.flask_remove_vip,
-            methods=["POST"]
+            methods=['POST']
         )
     
     # Main Stuff
@@ -139,48 +139,48 @@ class TwithBot(commands.Bot):
     def refresh_twitch_token(self, client_id, client_secret, refresh_token):
         if not client_id or not client_secret or not refresh_token:
             raise RuntimeError(
-                "Missing twitch_client_id, twitch_client_secret, or twitch_refresh_token"
+                'Missing twitch_client_id, twitch_client_secret, or twitch_refresh_token'
             )
 
         response = requests.post(
-            "https://id.twitch.tv/oauth2/token",
+            'https://id.twitch.tv/oauth2/token',
             params={
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "grant_type": "refresh_token",
-                "refresh_token": refresh_token,
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'grant_type': 'refresh_token',
+                'refresh_token': refresh_token,
             },
         )
 
         response.raise_for_status()
         data = response.json()
 
-        access_token = data["access_token"]
-        new_refresh_token = data.get("refresh_token", refresh_token)
+        access_token = data['access_token']
+        new_refresh_token = data.get('refresh_token', refresh_token)
 
         # Read .bashrc
-        bashrc = os.path.expanduser("~/.bashrc")
+        bashrc = os.path.expanduser('~/.bashrc')
 
-        with open(bashrc, "r") as f:
+        with open(bashrc, 'r') as f:
             content = f.read()
 
         # Update ONLY the token variables
         content = re.sub(
-            r"^export twitch_token=.*$",
-            f'export twitch_token="{access_token}"',
+            r'^export twitch_token=.*$',
+            f'export twitch_token={"'"}{access_token}{"'"}',
             content,
             flags=re.MULTILINE,
         )
 
         content = re.sub(
-            r"^export twitch_refresh_token=.*$",
-            f'export twitch_refresh_token="{new_refresh_token}"',
+            r'^export twitch_refresh_token=.*$',
+            f'export twitch_refresh_token={"'"}{new_refresh_token}{"'"}',
             content,
             flags=re.MULTILINE,
         )
 
         # Write .bashrc back
-        with open(bashrc, "w") as f:
+        with open(bashrc, 'w') as f:
             f.write(content)
 
         return access_token
@@ -381,21 +381,21 @@ class TwithBot(commands.Bot):
         ).result()
 
         if stream is None:
-            return {"live": False}
+            return {'live': False}
 
         return {
-            "live": True,
-            "id": stream.id,
-            "user_id": stream.user_id,
-            "user_name": stream.user_name,
-            "game_id": stream.game_id,
-            "game_name": stream.game_name,
-            "title": stream.title,
-            "viewer_count": stream.viewer_count,
-            "started_at": stream.started_at.isoformat(),
-            "language": stream.language,
-            "thumbnail_url": stream.thumbnail_url,
-            "type": stream.type
+            'live': True,
+            'id': stream.id,
+            'user_id': stream.user_id,
+            'user_name': stream.user_name,
+            'game_id': stream.game_id,
+            'game_name': stream.game_name,
+            'title': stream.title,
+            'viewer_count': stream.viewer_count,
+            'started_at': stream.started_at.isoformat(),
+            'language': stream.language,
+            'thumbnail_url': stream.thumbnail_url,
+            'type': stream.type
         }
     
     def status(self):
@@ -414,26 +414,26 @@ class TwithBot(commands.Bot):
         ).result()
 
         if user is None:
-            return {"error": "User not found"}, 404
+            return {'error': 'User not found'}, 404
 
         return {
-            "id": user.id,
-            "username": user.name,
-            "display_name": user.display_name,
-            "description": user.description,
-            "profile_image_url": user.profile_image_url,
-            "offline_image_url": user.offline_image_url,
-            "created_at": user.created_at.isoformat(),
-            "view_count": user.view_count
+            'id': user.id,
+            'username': user.name,
+            'display_name': user.display_name,
+            'description': user.description,
+            'profile_image_url': user.profile_image_url,
+            'offline_image_url': user.offline_image_url,
+            'created_at': user.created_at.isoformat(),
+            'view_count': user.view_count
         }
     
     def flask_send_message(self):
         data = request.json
 
-        message = data.get("message")
+        message = data.get('message')
 
         if not message:
-            return {"error": "Missing message"}, 400
+            return {'error': 'Missing message'}, 400
 
         self.send_message(message)
     
@@ -505,7 +505,7 @@ class YoutubeBot:
         )
         response.raise_for_status()
         match = re.search(
-            r'"videoId":"([A-Za-z0-9_-]{11})"',
+            rf'{"'"}videoId{"'"}:{"'"}([A-Za-z0-9_-]{"{"}11{"}"}){"'"}',
             response.text
         )
         if not match:
