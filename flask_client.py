@@ -21,10 +21,9 @@ class FlaskClient:
         ).json()
     
     class twitch:
-        def __init__(self, the_self):
-            self = the_self
+        def __init__(self, client):
+            self.client = client
     
     class youtube:
-        def __init__(self, the_self):
-            self = the_self
-
+        def __init__(self, client):
+            self.client = client
