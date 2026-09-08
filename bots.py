@@ -97,7 +97,7 @@ class TwithBot(commands.Bot):
         self.flask.add_url_rule(
             '/twitch/timeout',
             'timeout',
-            self.flask_send_message,
+            self.flask_timeout,
             methods=['POST']
         )
         self.flask.add_url_rule(

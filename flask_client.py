@@ -23,6 +23,95 @@ class FlaskClient:
     class twitch:
         def __init__(self, client):
             self.client = client
+        
+        def stream_info(self):
+            return self.client.get('/twitch/stream-info')
+        
+        def status(self):
+            return self.client.get('/twitch/status')
+        
+        def start(self):
+            return self.client.get('/twitch/start')
+        
+        def stop(self):
+            return self.client.post('/twitch/stop')
+        
+        def reload(self):
+            return self.client.post('/twitch/reload')
+        
+        def user_info(self, user):
+            return self.client.get(f'/twitch/user/{user}')
+        
+        def events(self):
+            return self.client.get('/twitch/events')
+        
+        def send_message(self, message):
+            return self.client.post(
+                '/twitch/send_message',
+                json={'message': message}
+            )
+        
+        def ban(self, user, reason):
+            return self.client.post(
+                '/twitch/ban',
+                json={
+                    'username': user,
+                    'reason': reason
+                }
+            )
+        
+        def unban(self, user):
+            return self.client.post(
+                '/twitch/unban',
+                json={
+                    'username': user
+                }
+            )
+        
+        def timeout(self, user, duration, reason):
+            return self.client.post(
+                '/twitch/timeout',
+                json={
+                    'username': user,
+                    'duration': duration,
+                    'reason': reason
+                }
+            )
+        
+        def create_clip(self):
+            return self.client.post('/twitch/create-clip')
+        
+        def add_moderator(self, user):
+            return self.client.post(
+                '/twitch/add-moderator',
+                json={
+                    'username': user
+                }
+            )
+        
+        def remove_moderator(self, user):
+            return self.client.post(
+                '/twitch/remove-moderator',
+                json={
+                    'username': user
+                }
+            )
+        
+        def add_vip(self, user):
+            return self.client.post(
+                '/twitch/add-vip',
+                json={
+                    'username': user
+                }
+            )
+        
+        def remove_vip(self, user):
+            return self.client.post(
+                '/twitch/remove-vip',
+                json={
+                    'username': user
+                }
+            )
     
     class youtube:
         def __init__(self, client):
