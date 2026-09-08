@@ -5,8 +5,8 @@ class FlaskClient:
             'flask_host_ip': kwargs.get('flask_host_ip'),
             'flask_host_port': kwargs.get('flask_host_port')
         }
-        self.Twitch = self.twitch(self.requirements)
-        self.Youtube = self.youtube(self.requirements)
+        self.Twitch = self.twitch(self)
+        self.Youtube = self.youtube(self)
     
     def get(self, endpoint):
         return requests.get(
