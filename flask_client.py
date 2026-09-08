@@ -8,11 +8,23 @@ class FlaskClient:
         self.Twitch = self.twitch(self.requirements)
         self.Youtube = self.youtube(self.requirements)
     
+    def get(self, endpoint):
+        return requests.get(
+            f"http://{self.requirements['flask_host_ip']}:{self.requirements['flask_host_port']}{endpoint}"
+        ).json()
+
+    def post(self, endpoint, **kwargs):
+        return requests.post(
+            f"http://{self.requirements['flask_host_ip']}:"
+            f"{self.requirements['flask_host_port']}{endpoint}",
+            **kwargs
+        ).json()
+    
     class twitch:
-        def __init__(self, info):
-            self.requirements = info
+        def __init__(self, the_self):
+            self = the_self
     
     class youtube:
-        def __init__(self, info):
-            self.requirements = info
+        def __init__(self, the_self):
+            self = the_self
 
