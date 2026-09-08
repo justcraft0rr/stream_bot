@@ -7,6 +7,7 @@ from datetime import datetime
 from twitchio.ext import commands, eventsub
 from flask import request
 import pytchat
+import obsws_python
 class TwithBot(commands.Bot):
     def __init__(self, **kwargs):
         self.requirements = {
@@ -526,3 +527,18 @@ class YoutubeBot:
                 self.stream_id += 1
 
             await asyncio.sleep(1)
+
+class OBS:
+    def __init__(self, **kwargs):
+        self.requirements = {
+            'obs_host': kwargs.get('obs_host'),
+            'obs_port': kwargs.get('obs_port'),
+            'obs_password': kwargs.get('obs_password'),
+            'flask': kwargs.get('flask')
+        }
+        self.obs = obsws_python.ReqClient(
+            host=self.requirements['obs_host'],
+            port=self.requirements['obs_port'],
+            password=self.requirements['obs_password']
+        )
+        self.flask = self.requirements['flask']
