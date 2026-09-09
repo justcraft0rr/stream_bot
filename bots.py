@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 from twitchio.ext import commands, eventsub
 from flask import request
+from openai import OpenAI
 import pytchat
 import obsws_python
 class TwithBot(commands.Bot):
@@ -542,3 +543,56 @@ class OBS:
             password=self.requirements['obs_password']
         )
         self.flask = self.requirements['flask']
+        self.flask.add_url_rule(
+            '/obs/get/scenes',
+            'get_scenes',
+            self.obs.get_scene_list
+        )
+        self.flask.add_url_rule(
+            '/obs/get/program_scene',
+            'current_program_scene',
+            self.obs.get_current_program_scene
+        )
+        self.flask.add_url_rule(
+            '/obs/set/program_scene',
+            'set_program_scene',
+            self.set_program_scene,
+            methods=['post']
+        )
+        self.flask.add_url_rule(
+            '/obs/get/scene_item_list',
+            'get_item_list',
+            self.obs.get_scene_item_list
+        )
+        self.flask.add_url_rule(
+            '/obs/get/scene_item_id',
+            'get_scene_item_id',
+            self.obs.get_scene_item_id
+        )
+    
+    def set_program_scene(self):
+        data = request.json
+        scene = data.get('scene')
+        self.obs.set_current_program_scene(scene)
+
+class GPT:
+    def __init__(self, **kwargs):
+        self.requirements = {
+            'gpt_api_key': kwargs.get('gpt_api_key'),
+            'flask': kwargs.get('flask')
+        }
+        self.client = OpenAI(
+            base_url='https://openrouter.ai/api/v1',
+            api_key=self.requirements['gpt_api_key']
+        )
+    
+    def ask(self, prompt):
+        response = self.client.chat.completions.create(
+            model="openai/gpt-5",
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        return response.choices[0].message.content
+
