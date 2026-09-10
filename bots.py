@@ -4,11 +4,14 @@ import os
 import re
 import json
 from datetime import datetime
-from twitchio.ext import commands, eventsub
+from twitchio.ext import commands
+from twitchio import eventsub
 from flask import request
 from openai import OpenAI
+from spotipy.oauth2 import SpotifyOAuth
 import pytchat
 import obsws_python
+import spotipy
 class TwithBot(commands.Bot):
     def __init__(self, **kwargs):
         self.requirements = {
@@ -596,3 +599,230 @@ class GPT:
 
         return response.choices[0].message.content
 
+class Spotify:
+    def __init__(self, **kwargs):
+        self.requirements = {
+            'spotify_client_id': kwargs.get('spotify_client_id'),
+            'spotify_client_secret': kwargs.get('spotify_client_secret'),
+            'flask': kwargs.get('flask')
+        }
+        self.sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
+            client_id=self.requirements['spotify_client_id'],
+            client_secret=self.requirements['spotify_client_secret'],
+            redirect_uri='http://127.0.0.1:8888/callback',
+            scope="user-read-playback-state user-modify-playback-state playlist-read-private"
+        ))
+        self.flask = self.requirements['flask']
+        self.flask.add_url_rule(
+            '/spotify/get/current_song',
+            'get_current_song',
+            self.current_song
+        )
+        self.flask.add_url_rule(
+            '/spotify/get/playlist',
+            'get_playlist',
+            self.get_playlist
+        )
+        self.flask.add_url_rule(
+            '/spotify/get/playlist_tracks',
+            'get_playlist_tracks',
+            self.get_playlist_tracks
+        )
+        self.flask.add_url_rule(
+            '/spotify/mediacontrol/play',
+            'play',
+            self.play
+        )
+        self.flask.add_url_rule(
+            '/spotify/mediacontrol/pause',
+            'pause',
+            self.pause
+        )
+        self.flask.add_url_rule(
+            '/spotify/mediacontrol/next',
+            'next',
+            self.next
+        )
+        self.flask.add_url_rule(
+            '/spotify/mediacontrol/previous',
+            'previous',
+            self.previous
+        )
+        self.flask.add_url_rule(
+            '/spotify/play/song'
+            'play_song',
+            self.play_song
+        )
+        self.flask.add_url_rule(
+            '/spotify/play/playlist',
+            'play_playlist',
+            self.play_playlist
+        )
+        self.flask.add_url_rule(
+            '/spotify/get/devices',
+            'get_devices',
+            self.get_devices
+        )
+        self.flask.add_url_rule(
+            '/spotify/change_device',
+            'change_device',
+            self.change_device
+        )
+        self.flask.add_url_rule(
+            '/spotify/change_device_by_name',
+            'change_device_by_name',
+            self.change_device_by_name
+        )
+        self.flask.add_url_rule(
+            '/spotify/search/song',
+            'search_song',
+            self.search_song
+        )
+        self.flask.add_url_rule(
+            '/spotify/queue/add_song',
+            'add_song_to_queue',
+            self.add_to_queue
+        )
+    
+    def add_to_queue(self):
+        data = request.json
+        track_uri = data.get('track_uri')
+        try:
+            device_id = data.get('device_id')
+        except:
+            device_id = None
+        self.sp.add_to_queue(
+            uri=track_uri,
+            device_id=device_id
+        )
+    
+    def search_song(self):
+        data = request.json
+        query = data.get('query')
+        results = self.sp.search(q=query, type="track", limit=1)
+
+        if not results["tracks"]["items"]:
+            return None
+
+        return results["tracks"]["items"][0]
+    
+    def play_song(self):
+        data = request.json
+        track_uri = data.get('track_uri')
+        try:
+            device_id = data.get('device_id')
+        except:
+            device_id = None
+        self.sp.start_playback(
+            device_id=device_id,
+            uris=[track_uri]
+        )
+
+
+    def play_playlist(self):
+        data = request.json
+        playlist_id = data.get('playlist_id')
+        try:
+            device_id = data.get('device_id')
+        except:
+            device_id = None
+        self.sp.start_playback(
+            device_id=device_id,
+            context_uri=f"spotify:playlist:{playlist_id}"
+        )
+
+
+    def get_devices(self):
+        return self.sp.devices()["devices"]
+
+
+    def change_device(self):
+        data = request.json
+        device_id = data.get('device_id')
+        try:
+            play = data.get('play')
+        except:
+            play = False
+        self.sp.transfer_playback(
+            device_id=device_id,
+            force_play=play
+        )
+
+
+    def change_device_by_name(self):
+        data = request.json
+        name = data.get('name')
+        try:
+            play = data.get('play')
+        except:
+            play = False
+        devices = self.get_devices()
+
+        for device in devices:
+            if device["name"].lower() == name.lower():
+                self.change_device(device["id"], play)
+                return device
+
+        return None
+
+    def current_song(self):
+        playback = self.sp.current_playback()
+
+        if not playback or not playback["item"]:
+            return None
+
+        track = playback["item"]
+
+        return {
+            "name": track["name"],
+            "artists": [artist["name"] for artist in track["artists"]],
+            "album": track["album"]["name"],
+            "uri": track["uri"]
+        }
+
+
+    def get_playlist(self):
+        data = request.json
+        playlist_id = data.get('playlist_id')
+        return self.sp.playlist(playlist_id)
+
+
+    def get_playlist_tracks(self):
+        data = request.json
+        playlist_id = data.get('playlist_id')
+        tracks = self.sp.playlist_tracks(playlist_id)
+        songs = []
+
+        while tracks:
+            for item in tracks["items"]:
+                track = item["track"]
+
+                if track:
+                    songs.append({
+                        "name": track["name"],
+                        "artists": [artist["name"] for artist in track["artists"]],
+                        "uri": track["uri"]
+                    })
+
+            if not tracks["next"]:
+                break
+
+            tracks = self.sp.next(tracks)
+
+        return songs
+
+
+    def play(self):
+        self.sp.start_playback()
+
+
+    def pause(self):
+        self.sp.pause_playback()
+
+
+    def next(self):
+        self.sp.next_track()
+
+
+    def previous(self):
+        self.sp.previous_track()
