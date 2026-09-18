@@ -6,10 +6,20 @@ def start_bots(**kwargs):
         twitch_token_secret=kwargs.get('twitch_token_secret'),
         twitch_broadcaster=kwargs.get('twitch_broadcaster'),
         twitch_bot=kwargs.get('twitch_bot'),
+        stream_events=kwargs.get('stream_events'),
+        flask=kwargs.get('flask')
+    )
+    kick = bots.KickBot(
+        kick_client_id=kwargs.get('kick_client_id'),
+        kick_client_secret=kwargs.get('kick_client_secret'),
+        kick_broadcaster=kwargs.get('kick_broadcaster'),
+        kick_webhook_url=kwargs.get('kick_webhook_url'),
+        stream_events=kwargs.get('stream_events'),
         flask=kwargs.get('flask')
     )
     youtube = bots.YoutubeBot(
         youtube_channel=kwargs.get('youtube_channel'),
+        stream_events=kwargs.get('stream_events'),
         flask=kwargs.get('flask')
     )
     obs = bots.OBS(
@@ -29,6 +39,7 @@ def start_bots(**kwargs):
     )
     return {
         'twitch': twitch,
+        'kick': kick,
         'youtube': youtube,
         'obs': obs,
         'gpt': gpt,

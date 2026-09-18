@@ -2,16 +2,24 @@ import requests
 import asyncio
 import os
 import re
+import secrets
+import hashlib
+import base64
+import urllib.parse
 import json
 from datetime import datetime
-from twitchio.ext import commands
-from twitchio import eventsub
+from twitchio.ext import commands, eventsub
 from flask import request
 from openai import OpenAI
 from spotipy.oauth2 import SpotifyOAuth
+from threading import Thread
 import pytchat
 import obsws_python
 import spotipy
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
 class TwithBot(commands.Bot):
     def __init__(self, **kwargs):
         self.requirements = {
@@ -20,6 +28,7 @@ class TwithBot(commands.Bot):
             'twitch_token_secret': kwargs.get('twitch_token_secret'),
             'twitch_broadcaster': kwargs.get('twitch_broadcaster'),
             'twitch_bot': kwargs.get('twitch_bot'),
+            'stream_events': kwargs.get('stream_events'),
             'flask': kwargs.get('flask')
         }
         self.refresh_twitch_token(
@@ -38,8 +47,7 @@ class TwithBot(commands.Bot):
         )
 
         self.ready = False
-        self.stream_id = 0
-        self.stream_events = {}
+        self.stream_events = self.requirements['stream_events']
         self.eventsub = eventsub.EventSubWSClient(self)
         self.connector = '≋'
         self.flask = self.requirements['flask']
@@ -197,17 +205,19 @@ class TwithBot(commands.Bot):
             moderator=await self.fetch_user(self.requirements['twitch_bot']).id
         )
         asyncio.create_task(self.live_handle())
+        print('Twitch Connected!')
     
     async def event_eventsub_notification_followV2(
         self,
         event: eventsub.ChannelFollowData
     ):
-        self.stream_events[self.stream_id+1] = {'event': 'follow', 'username': event.user.name}
-        self.stream_id += 1
+        self.stream_events[self.stream_events['stream_id']+1] = {'event': 'follow', 'username': event.user.name}
+        self.stream_events['stream_id'] += 1
     
     def event_message(self, message):
-        self.stream_events[self.stream_id+1] = {'event': 'message', 'username': message.author.name, 'message': message.content}
-        self.stream_id += 1
+        self.stream_events[self.stream_events['stream_id']+1] = {'event': 'message', 'username': message.author.name, 'message': message.content}
+        self.stream_events['stream_id'] += 1
+        print(f'[Twitch] {message.author.name}: {message.content}')
     
     async def is_live(self):
         streams = await self.fetch_streams(
@@ -247,7 +257,7 @@ class TwithBot(commands.Bot):
                         indent=4
                     )
                     self.stream_events = {}
-                    self.stream_id = 0
+                    self.stream_events['stream_id'] = 0
                 old_state = state
                 await asyncio.sleep(30)
     
@@ -483,19 +493,1089 @@ class TwithBot(commands.Bot):
         username = data.get('username')
         self.remove_vip(username)
 
+class KickBot:
+
+    def __init__(self, **kwargs):
+
+        self.requirements = {
+            'kick_client_id': kwargs.get('kick_client_id'),
+            'kick_client_secret': kwargs.get('kick_client_secret'),
+            'kick_broadcaster': kwargs.get('kick_broadcaster'),
+            'kick_webhook_url': kwargs.get('kick_webhook_url'),
+            'stream_events': kwargs.get('stream_events'),
+            'flask': kwargs.get('flask')
+        }
+
+        self.access_token = os.getenv('kick_access_token')
+        self.refresh_token = os.getenv('kick_refresh_token')
+
+        self.ready = False
+        self.stream_events = self.requirements['stream_events']
+        self.connector = '≋'
+
+        self.flask = self.requirements['flask']
+
+        self.flask.add_url_rule(
+            '/kick/status',
+            'kick_status',
+            self.status
+        )
+
+        self.flask.add_url_rule(
+            '/kick/user/<username>',
+            'kick_user',
+            self.flask_user
+        )
+
+        self.flask.add_url_rule(
+            '/kick/channel',
+            'kick_channel',
+            self.flask_channel
+        )
+
+        self.flask.add_url_rule(
+            '/kick/stream-info',
+            'kick_stream_info',
+            self.stream
+        )
+
+        self.flask.add_url_rule(
+            '/kick/events',
+            'kick_events',
+            self.events
+        )
+
+        self.flask.add_url_rule(
+            '/kick/send_message',
+            'kick_send_message',
+            self.flask_send_message,
+            methods=['POST']
+        )
+
+        self.flask.add_url_rule(
+            '/kick/delete_message',
+            'kick_delete_message',
+            self.flask_delete_message,
+            methods=['POST']
+        )
+
+        self.flask.add_url_rule(
+            '/kick/ban',
+            'kick_ban',
+            self.flask_ban,
+            methods=['POST']
+        )
+
+        self.flask.add_url_rule(
+            '/kick/unban',
+            'kick_unban',
+            self.flask_unban,
+            methods=['POST']
+        )
+
+        self.flask.add_url_rule(
+            '/kick/timeout',
+            'kick_timeout',
+            self.flask_timeout,
+            methods=['POST']
+        )
+
+        self.flask.add_url_rule(
+            '/kick/update_channel',
+            'kick_update_channel',
+            self.flask_update_channel,
+            methods=['POST']
+        )
+
+        self.flask.add_url_rule(
+            '/kick/rewards',
+            'kick_rewards',
+            self.flask_rewards
+        )
+
+        self.flask.add_url_rule(
+            '/kick/rewards/create',
+            'kick_rewards_create',
+            self.flask_rewards_create,
+            methods=['POST']
+        )
+
+        self.flask.add_url_rule(
+            '/kick/rewards/<reward_id>',
+            'kick_rewards_update',
+            self.flask_rewards_update,
+            methods=['PATCH']
+        )
+
+        self.flask.add_url_rule(
+            '/kick/rewards/<reward_id>/delete',
+            'kick_rewards_delete',
+            self.flask_rewards_delete,
+            methods=['POST']
+        )
+
+        self.flask.add_url_rule(
+            '/kick/redemptions',
+            'kick_redemptions',
+            self.flask_redemptions
+        )
+
+        self.flask.add_url_rule(
+            '/kick/redemptions/accept',
+            'kick_redemptions_accept',
+            self.flask_redemptions_accept,
+            methods=['POST']
+        )
+
+        self.flask.add_url_rule(
+            '/kick/redemptions/reject',
+            'kick_redemptions_reject',
+            self.flask_redemptions_reject,
+            methods=['POST']
+        )
+
+        self.flask.add_url_rule(
+            '/kick/kicks/leaderboard',
+            'kick_kicks_leaderboard',
+            self.flask_kicks_leaderboard
+        )
+
+        self.flask.add_url_rule(
+            '/kick/subscriptions',
+            'kick_subscriptions',
+            self.flask_subscriptions
+        )
+
+        self.flask.add_url_rule(
+            '/kick/webhook',
+            'kick_webhook',
+            self.webhook,
+            methods=['POST']
+        )
+
+        self.broadcaster = self.get_user(
+            self.requirements['kick_broadcaster']
+        )
+
+        if self.broadcaster:
+
+            self.broadcaster_id = self.broadcaster.get('user_id')
+
+            if not self.broadcaster_id:
+                self.broadcaster_id = self.broadcaster.get('id')
+
+            self.ready = True
+
+    def request(self, method, endpoint, **kwargs):
+
+        headers = {
+            'Authorization': f'Bearer {self.access_token}',
+            'Content-Type': 'application/json'
+        }
+
+        response = requests.request(
+            method,
+            f'https://api.kick.com/public/v1/{endpoint}',
+            headers=headers,
+            **kwargs
+        )
+
+        if response.status_code == 401:
+
+            if self.refresh():
+
+                headers['Authorization'] = (
+                    f'Bearer {self.access_token}'
+                )
+
+                response = requests.request(
+                    method,
+                    f'https://api.kick.com/public/v1/{endpoint}',
+                    headers=headers,
+                    **kwargs
+                )
+
+        return response
+
+    def refresh(self):
+
+        if not self.refresh_token:
+            return False
+
+        response = requests.post(
+            'https://id.kick.com/oauth/token',
+            data={
+                'grant_type': 'refresh_token',
+                'client_id': self.requirements['kick_client_id'],
+                'client_secret': self.requirements['kick_client_secret'],
+                'refresh_token': self.refresh_token
+            }
+        )
+
+        if not response.ok:
+            return False
+
+        tokens = response.json()
+
+        self.access_token = tokens['access_token']
+        self.refresh_token = tokens['refresh_token']
+
+        self.save_tokens()
+
+        return True
+
+    def save_tokens(self):
+
+        bashrc = os.path.expanduser('~/.bashrc')
+
+        with open(bashrc, 'r') as file:
+            lines = file.read().splitlines()
+
+        lines = [
+            line for line in lines
+            if not line.startswith('export kick_access_token=')
+            and not line.startswith('export kick_refresh_token=')
+        ]
+
+        lines.append(
+            f'export kick_access_token="{self.access_token}"'
+        )
+
+        lines.append(
+            f'export kick_refresh_token="{self.refresh_token}"'
+        )
+
+        with open(bashrc, 'w') as file:
+            file.write('\n'.join(lines) + '\n')
+
+    def get_user(self, username=None):
+
+        params = {}
+
+        if username:
+            params['username'] = username
+
+        response = self.request(
+            'GET',
+            'users',
+            params=params
+        )
+
+        if not response.ok:
+            return None
+
+        data = response.json().get('data')
+
+        if not data:
+            return None
+
+        return data[0]
+
+    def get_channel(self):
+
+        response = self.request(
+            'GET',
+            'channels',
+            params={
+                'broadcaster_user_id': self.broadcaster_id
+            }
+        )
+
+        if not response.ok:
+            return None
+
+        data = response.json().get('data')
+
+        if not data:
+            return None
+
+        return data[0]
+
+    def get_stream(self):
+
+        response = self.request(
+            'GET',
+            'livestreams',
+            params={
+                'broadcaster_user_id': self.broadcaster_id
+            }
+        )
+
+        if not response.ok:
+            return None
+
+        data = response.json().get('data')
+
+        if not data:
+            return None
+
+        return data[0]
+
+    def is_live(self):
+
+        return self.get_stream() is not None
+
+    def send_message(self, message, reply_to_message_id=None):
+
+        data = {
+            'broadcaster_user_id': self.broadcaster_id,
+            'content': message,
+            'type': 'bot'
+        }
+
+        if reply_to_message_id:
+            data['reply_to_message_id'] = reply_to_message_id
+
+        response = self.request(
+            'POST',
+            'chat',
+            json=data
+        )
+
+        if not response.ok:
+            return False
+
+        return response.json()
+
+    def delete_message(self, message_id):
+
+        response = self.request(
+            'DELETE',
+            f'chat/{message_id}'
+        )
+
+        return response.ok
+
+    def ban(self, user_id, reason=None):
+
+        data = {
+            'broadcaster_user_id': self.broadcaster_id,
+            'user_id': user_id
+        }
+
+        if reason:
+            data['reason'] = reason
+
+        response = self.request(
+            'POST',
+            'moderation/bans',
+            json=data
+        )
+
+        return response.ok
+
+    def timeout(self, user_id, duration, reason=None):
+
+        data = {
+            'broadcaster_user_id': self.broadcaster_id,
+            'user_id': user_id,
+            'duration': duration
+        }
+
+        if reason:
+            data['reason'] = reason
+
+        response = self.request(
+            'POST',
+            'moderation/bans',
+            json=data
+        )
+
+        return response.ok
+
+    def unban(self, user_id):
+
+        response = self.request(
+            'DELETE',
+            'moderation/bans',
+            json={
+                'broadcaster_user_id': self.broadcaster_id,
+                'user_id': user_id
+            }
+        )
+
+        return response.ok
+
+    def update_channel(self, **kwargs):
+
+        data = {}
+
+        if kwargs.get('category_id') is not None:
+            data['category_id'] = kwargs.get('category_id')
+
+        if kwargs.get('title') is not None:
+            data['title'] = kwargs.get('title')
+
+        if kwargs.get('language') is not None:
+            data['language'] = kwargs.get('language')
+
+        if kwargs.get('custom_tags') is not None:
+            data['custom_tags'] = kwargs.get('custom_tags')
+
+        response = self.request(
+            'PATCH',
+            'channels',
+            json=data
+        )
+
+        return response.ok
+
+    def get_rewards(self):
+
+        response = self.request(
+            'GET',
+            'channels/rewards'
+        )
+
+        if not response.ok:
+            return None
+
+        return response.json()
+
+    def create_reward(
+        self,
+        title,
+        cost,
+        description=None,
+        is_user_input_required=False,
+        is_enabled=True,
+        is_paused=False,
+        is_in_stock=True
+    ):
+
+        data = {
+            'title': title,
+            'cost': cost,
+            'is_user_input_required': is_user_input_required,
+            'is_enabled': is_enabled,
+            'is_paused': is_paused,
+            'is_in_stock': is_in_stock
+        }
+
+        if description is not None:
+            data['description'] = description
+
+        response = self.request(
+            'POST',
+            'channels/rewards',
+            json=data
+        )
+
+        if not response.ok:
+            return None
+
+        return response.json()
+
+    def update_reward(self, reward_id, **kwargs):
+
+        data = {}
+
+        allowed = [
+            'title',
+            'cost',
+            'description',
+            'is_user_input_required',
+            'is_enabled',
+            'is_paused',
+            'is_in_stock'
+        ]
+
+        for key in allowed:
+
+            if key in kwargs:
+                data[key] = kwargs[key]
+
+        response = self.request(
+            'PATCH',
+            f'channels/rewards/{reward_id}',
+            json=data
+        )
+
+        return response.ok
+
+    def delete_reward(self, reward_id):
+
+        response = self.request(
+            'DELETE',
+            f'channels/rewards/{reward_id}'
+        )
+
+        return response.ok
+
+    def get_redemptions(self, **kwargs):
+
+        response = self.request(
+            'GET',
+            'channels/rewards/redemptions',
+            params=kwargs
+        )
+
+        if not response.ok:
+            return None
+
+        return response.json()
+
+    def accept_redemptions(self, redemption_ids):
+
+        response = self.request(
+            'POST',
+            'channels/rewards/redemptions/accept',
+            json={
+                'ids': redemption_ids
+            }
+        )
+
+        return response.ok
+
+    def reject_redemptions(self, redemption_ids):
+
+        response = self.request(
+            'POST',
+            'channels/rewards/redemptions/reject',
+            json={
+                'ids': redemption_ids
+            }
+        )
+
+        return response.ok
+
+    def get_kicks_leaderboard(self, **kwargs):
+
+        response = self.request(
+            'GET',
+            'kicks/leaderboard',
+            params=kwargs
+        )
+
+        if not response.ok:
+            return None
+
+        return response.json()
+
+    def get_subscriptions(self):
+
+        response = self.request(
+            'GET',
+            'channels',
+            params={
+                'broadcaster_user_id': self.broadcaster_id
+            }
+        )
+
+        if not response.ok:
+            return None
+
+        return response.json()
+
+    def subscribe_events(self):
+
+        events = [
+            'chat.message.sent',
+            'channel.followed',
+            'channel.subscription.new',
+            'channel.subscription.renewal',
+            'channel.subscription.gifts',
+            'channel.reward.redemption.updated',
+            'livestream.status.updated',
+            'livestream.metadata.updated',
+            'moderation.banned',
+            'kicks.gifted'
+        ]
+
+        results = []
+
+        for event in events:
+
+            response = self.request(
+                'POST',
+                'events/subscriptions',
+                json={
+                    'broadcaster_user_id': self.broadcaster_id,
+                    'events': [
+                        {
+                            'name': event,
+                            'version': 1
+                        }
+                    ],
+                    'method': 'webhook'
+                }
+            )
+
+            results.append({
+                'event': event,
+                'success': response.ok,
+                'status': response.status_code
+            })
+
+        return results
+
+    def get_event_subscriptions(self):
+
+        response = self.request(
+            'GET',
+            'events/subscriptions'
+        )
+
+        if not response.ok:
+            return None
+
+        return response.json()
+
+    def delete_event_subscriptions(self, **kwargs):
+
+        response = self.request(
+            'DELETE',
+            'events/subscriptions',
+            json=kwargs
+        )
+
+        return response.ok
+
+    def webhook(self):
+
+        event_type = request.headers.get('Kick-Event-Type')
+        event = request.get_json(silent=True) or {}
+
+        if event_type == 'chat.message.sent':
+
+            sender = event.get('sender', {})
+
+            self.stream_events[self.stream_events['stream_id'] + 1] = {
+                'event': 'message',
+                'username': sender.get('username'),
+                'user_id': sender.get('user_id'),
+                'message': event.get('content'),
+                'message_id': event.get('message_id')
+            }
+
+            self.stream_events['stream_id'] += 1
+
+        elif event_type == 'channel.followed':
+
+            follower = event.get('follower', {})
+
+            self.stream_events[self.stream_events['stream_id'] + 1] = {
+                'event': 'follow',
+                'username': follower.get('username'),
+                'user_id': follower.get('user_id')
+            }
+
+            self.stream_events['stream_id'] += 1
+
+        elif event_type == 'channel.subscription.new':
+
+            subscriber = event.get('subscriber', {})
+
+            self.stream_events[self.stream_events['stream_id'] + 1] = {
+                'event': 'subscription',
+                'username': subscriber.get('username'),
+                'user_id': subscriber.get('user_id'),
+                'duration': event.get('duration')
+            }
+
+            self.stream_events['stream_id'] += 1
+
+        elif event_type == 'channel.subscription.renewal':
+
+            subscriber = event.get('subscriber', {})
+
+            self.stream_events[self.stream_events['stream_id'] + 1] = {
+                'event': 'subscription_renewal',
+                'username': subscriber.get('username'),
+                'user_id': subscriber.get('user_id'),
+                'duration': event.get('duration')
+            }
+
+            self.stream_events['stream_id'] += 1
+
+        elif event_type == 'channel.subscription.gifts':
+
+            gifter = event.get('gifter', {})
+
+            self.stream_events[self.stream_events['stream_id'] + 1] = {
+                'event': 'subscription_gift',
+                'username': gifter.get('username'),
+                'user_id': gifter.get('user_id'),
+                'giftees': event.get('giftees', [])
+            }
+
+            self.stream_events['stream_id'] += 1
+
+        elif event_type == 'channel.reward.redemption.updated':
+
+            redeemer = event.get('redeemer', {})
+
+            self.stream_events[self.stream_events['stream_id'] + 1] = {
+                'event': 'reward_redemption',
+                'username': redeemer.get('username'),
+                'user_id': redeemer.get('user_id'),
+                'reward': event.get('reward'),
+                'status': event.get('status'),
+                'user_input': event.get('user_input')
+            }
+
+            self.stream_events['stream_id'] += 1
+
+        elif event_type == 'livestream.status.updated':
+
+            self.stream_events[self.stream_events['stream_id'] + 1] = {
+                'event': 'live',
+                'live': event.get('is_live'),
+                'title': event.get('title'),
+                'started_at': event.get('started_at'),
+                'ended_at': event.get('ended_at')
+            }
+
+            self.stream_events['stream_id'] += 1
+
+        elif event_type == 'livestream.metadata.updated':
+
+            metadata = event.get('metadata', {})
+
+            self.stream_events[self.stream_events['stream_id'] + 1] = {
+                'event': 'stream_metadata',
+                'title': metadata.get('title'),
+                'language': metadata.get('language'),
+                'has_mature_content': metadata.get('has_mature_content'),
+                'category': metadata.get('category')
+            }
+
+            self.stream_events['stream_id'] += 1
+
+        elif event_type == 'moderation.banned':
+
+            banned_user = event.get('banned_user', {})
+            metadata = event.get('metadata', {})
+
+            self.stream_events[self.stream_events['stream_id'] + 1] = {
+                'event': 'ban',
+                'username': banned_user.get('username'),
+                'user_id': banned_user.get('user_id'),
+                'reason': metadata.get('reason'),
+                'expires_at': metadata.get('expires_at')
+            }
+
+            self.stream_events['stream_id'] += 1
+
+        elif event_type == 'kicks.gifted':
+
+            sender = event.get('sender', {})
+            gift = event.get('gift', {})
+
+            self.stream_events[self.stream_events['stream_id'] + 1] = {
+                'event': 'kicks',
+                'username': sender.get('username'),
+                'user_id': sender.get('user_id'),
+                'amount': gift.get('amount'),
+                'name': gift.get('name'),
+                'type': gift.get('type'),
+                'tier': gift.get('tier'),
+                'message': gift.get('message')
+            }
+
+            self.stream_events['stream_id'] += 1
+
+        return '', 200
+
+    def events(self):
+
+        return self.stream_events
+
+    def stream(self):
+
+        stream = self.get_stream()
+
+        if not stream:
+            return {
+                'live': False
+            }
+
+        return stream
+
+    def status(self):
+
+        return {
+            'ready': self.ready,
+            'live': self.is_live()
+        }
+
+    def flask_user(self, username):
+
+        user = self.get_user(username)
+
+        if not user:
+            return {
+                'error': 'User not found'
+            }, 404
+
+        return user
+
+    def flask_channel(self):
+
+        channel = self.get_channel()
+
+        if not channel:
+            return {
+                'error': 'Channel not found'
+            }, 404
+
+        return channel
+
+    def flask_send_message(self):
+
+        data = request.get_json() or {}
+
+        if not data.get('message'):
+            return {
+                'error': 'Missing message'
+            }, 400
+
+        result = self.send_message(
+            data['message'],
+            data.get('reply_to_message_id')
+        )
+
+        if not result:
+            return {
+                'error': 'Failed to send message'
+            }, 500
+
+        return result
+
+    def flask_delete_message(self):
+
+        data = request.get_json() or {}
+
+        if not data.get('message_id'):
+            return {
+                'error': 'Missing message_id'
+            }, 400
+
+        return {
+            'success': self.delete_message(
+                data['message_id']
+            )
+        }
+
+    def flask_ban(self):
+
+        data = request.get_json() or {}
+
+        if not data.get('user_id'):
+            return {
+                'error': 'Missing user_id'
+            }, 400
+
+        return {
+            'success': self.ban(
+                data['user_id'],
+                data.get('reason')
+            )
+        }
+
+    def flask_unban(self):
+
+        data = request.get_json() or {}
+
+        if not data.get('user_id'):
+            return {
+                'error': 'Missing user_id'
+            }, 400
+
+        return {
+            'success': self.unban(
+                data['user_id']
+            )
+        }
+
+    def flask_timeout(self):
+
+        data = request.get_json() or {}
+
+        if not data.get('user_id'):
+            return {
+                'error': 'Missing user_id'
+            }, 400
+
+        if not data.get('duration'):
+            return {
+                'error': 'Missing duration'
+            }, 400
+
+        return {
+            'success': self.timeout(
+                data['user_id'],
+                data['duration'],
+                data.get('reason')
+            )
+        }
+
+    def flask_update_channel(self):
+
+        data = request.get_json() or {}
+
+        return {
+            'success': self.update_channel(**data)
+        }
+
+    def flask_rewards(self):
+
+        rewards = self.get_rewards()
+
+        if rewards is None:
+            return {
+                'error': 'Failed to get rewards'
+            }, 500
+
+        return rewards
+
+    def flask_rewards_create(self):
+
+        data = request.get_json() or {}
+
+        if not data.get('title'):
+            return {
+                'error': 'Missing title'
+            }, 400
+
+        if data.get('cost') is None:
+            return {
+                'error': 'Missing cost'
+            }, 400
+
+        result = self.create_reward(
+            title=data['title'],
+            cost=data['cost'],
+            description=data.get('description'),
+            is_user_input_required=data.get(
+                'is_user_input_required',
+                False
+            ),
+            is_enabled=data.get(
+                'is_enabled',
+                True
+            ),
+            is_paused=data.get(
+                'is_paused',
+                False
+            ),
+            is_in_stock=data.get(
+                'is_in_stock',
+                True
+            )
+        )
+
+        if result is None:
+            return {
+                'error': 'Failed to create reward'
+            }, 500
+
+        return result
+
+    def flask_rewards_update(self, reward_id):
+
+        data = request.get_json() or {}
+
+        return {
+            'success': self.update_reward(
+                reward_id,
+                **data
+            )
+        }
+
+    def flask_rewards_delete(self, reward_id):
+
+        return {
+            'success': self.delete_reward(
+                reward_id
+            )
+        }
+
+    def flask_redemptions(self):
+
+        data = request.args.to_dict()
+
+        result = self.get_redemptions(**data)
+
+        if result is None:
+            return {
+                'error': 'Failed to get redemptions'
+            }, 500
+
+        return result
+
+    def flask_redemptions_accept(self):
+
+        data = request.get_json() or {}
+
+        if not data.get('ids'):
+            return {
+                'error': 'Missing ids'
+            }, 400
+
+        return {
+            'success': self.accept_redemptions(
+                data['ids']
+            )
+        }
+
+    def flask_redemptions_reject(self):
+
+        data = request.get_json() or {}
+
+        if not data.get('ids'):
+            return {
+                'error': 'Missing ids'
+            }, 400
+
+        return {
+            'success': self.reject_redemptions(
+                data['ids']
+            )
+        }
+
+    def flask_kicks_leaderboard(self):
+
+        result = self.get_kicks_leaderboard(
+            **request.args.to_dict()
+        )
+
+        if result is None:
+            return {
+                'error': 'Failed to get leaderboard'
+            }, 500
+
+        return result
+
+    def flask_subscriptions(self):
+
+        result = self.get_subscriptions()
+
+        if result is None:
+            return {
+                'error': 'Failed to get subscriptions'
+            }, 500
+
+        return result
+
 class YoutubeBot:
     def __init__(self, **kwargs):
         self.requirements = {
             'youtube_channel': kwargs.get('youtube_channel'),
             'flask': kwargs.get('flask')
         }
-
-        self.chat = pytchat.create(
-            video_id=self.get_stream()
-        )
-        asyncio.create_task(self.live_handle())
+        if self.get_stream():
+            self.chat = pytchat.create(
+                video_id=self.get_stream()
+            )
+        else:
+            self.chat = None
+        Thread(
+            target=lambda: asyncio.run(self.live_handle()),
+            daemon=True
+        ).start()
         self.stream_events = {}
-        self.stream_id = 0
+        self.stream_events['stream_id'] = 0
         self.flask = self.requirements['flask']
     
     def get_stream(self):
@@ -521,14 +1601,14 @@ class YoutubeBot:
         return self.get_stream() is not None
     
     async def live_handle(self):
-        while self.chat.is_alive():
+        while self.chat and self.chat.is_alive():
             for message in self.chat.get().sync_items():
-                self.stream_events[self.stream_id+1] = {
+                self.stream_events[self.stream_events['stream_id']+1] = {
                     'event': 'message',
                     'username': message.author.name,
                     'message': message.message
                 }
-                self.stream_id += 1
+                self.stream_events['stream_id'] += 1
 
             await asyncio.sleep(1)
 
