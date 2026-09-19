@@ -27,7 +27,7 @@ class TwithBot(commands.Bot):
             'stream_events': kwargs.get('stream_events'),
             'flask': kwargs.get('flask')
         }
-        self.refresh_twitch_token(
+        self.twitch_token = self.refresh_twitch_token(
             self.requirements['twitch_token_id'],
             self.requirements['twitch_token_secret'],
             self.requirements['twitch_refresh_token']
@@ -196,9 +196,16 @@ class TwithBot(commands.Bot):
 
     async def event_ready(self):
         self.ready = True
+        broadcaster = (await self.fetch_users(
+            names=[self.requirements['twitch_broadcaster']]
+        ))[0].id
+        moderator = (await self.fetch_users(
+            names=[self.requirements['twitch_bot']]
+        ))[0].id
         await self.eventsub.subscribe_channel_follows_v2(
-            broadcaster=await self.fetch_user(self.requirements['twitch_broadcaster']).id,
-            moderator=await self.fetch_user(self.requirements['twitch_bot']).id
+            broadcaster=broadcaster,
+            moderator=moderator,
+            token=self.twitch_token
         )
         asyncio.create_task(self.live_handle())
         print('Twitch Connected!')
@@ -209,7 +216,7 @@ class TwithBot(commands.Bot):
     ):
         self.stream_events.append({'event': 'follow', 'platform': 'twitch', 'username': event.user.name})
     
-    def event_message(self, message):
+    async def event_message(self, message):
         self.stream_events.append({'event': 'message', 'platform': 'twitch', 'username': message.author.name, 'message': message.content})
         print(f'[Twitch] {message.author.name}: {message.content}')
     

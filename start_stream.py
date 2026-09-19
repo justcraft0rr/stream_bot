@@ -1,10 +1,10 @@
 from start_bots import start_bots
-from flask import Flask
+import flask as flask_imported
 from os import getenv
 from html import escape
 import tomllib
 config = tomllib.load(open('/home/justcraft/config.toml', 'rb'))
-flask = Flask(__name__)
+flask = flask_imported.Flask(__name__)
 stream_events = []
 bots = start_bots(
     twitch_refresh_token=getenv('twitch_refresh_token'),
@@ -228,75 +228,73 @@ def index():
 </body>
 </html>
 '''
-@flask.route('/chat/api/<platform>')
+@flask.route("/api/chat/<platform>")
 def chat_api(platform):
-    if platform not in ['all', 'twitch', 'youtube', 'kick']:
-        return {'error': 'Wrong API Platform'}, 404
-@flask.route('/chat/<platform>')
-def chat(platform):
     platform = platform.lower()
 
-    if platform == 'all':
+    if platform == "all":
         stream_events = []
 
         for bot in bots.values():
-            stream_events.extend(bot.stream_events)
+            if hasattr(bot, "stream_events"):
+                stream_events.extend(bot.stream_events)
     else:
         bot = bots.get(platform)
 
         if bot is None:
-            return 'Unknown platform', 404
+            return "Unknown platform", 404
 
         stream_events = bot.stream_events
 
     messages = []
 
     for event in stream_events:
-        if event.get('event') != 'message':
+        if event.get("event") != "message":
             continue
 
-        username = escape(str(event.get('username', 'Unknown')))
-        message = escape(str(event.get('message', '')))
-        event_platform = escape(str(event.get('platform', platform)))
+        messages.append({
+            "platform": event.get("platform", platform),
+            "username": event.get("username", "Unknown"),
+            "message": event.get("message", "")
+        })
 
-        messages.append(f'''
-            <div class='message'>
-                <span class='platform'>[{event_platform}]</span>
-                <span class='username'>{username}</span>
-                <span class='text'>{message}</span>
-            </div>
-        ''')
+    return flask_imported.jsonify(messages)
+@flask.route("/chat/<platform>")
+def chat(platform):
+    platform = platform.lower()
 
-    return f'''
+    if platform != "all" and platform not in bots:
+        return "Unknown platform", 404
+
+    return f"""
     <!DOCTYPE html>
     <html>
     <head>
         <title>{platform.title()} Chat</title>
 
         <style>
-            body {{
+            html, body {{
                 margin: 0;
-                background: #111;
+                background: transparent;
                 color: white;
                 font-family: Arial, sans-serif;
             }}
 
             #chat {{
-                padding: 20px;
+                padding: 10px;
             }}
 
             .message {{
-                padding: 5px 0;
+                font-size: 12px;
+                padding: 2px 0;
             }}
 
             .platform {{
                 color: #888;
-                margin-right: 6px;
             }}
 
             .username {{
                 font-weight: bold;
-                margin-right: 6px;
             }}
 
             .text {{
@@ -306,11 +304,46 @@ def chat(platform):
     </head>
 
     <body>
-        <div id='chat'>
-            {''.join(messages)}
-        </div>
+        <div id="chat"></div>
+
+        <script>
+            const platform = "{platform}";
+            const chat = document.getElementById("chat");
+
+            async function updateChat() {'''{{
+                const response = await fetch("/api/chat/" + platform);
+                const messages = await response.json();
+
+                chat.replaceChildren();
+
+                for (const message of messages) {{
+                    const row = document.createElement("div");
+                    row.className = "message";
+
+                    const platformName = document.createElement("span");
+                    platformName.className = "platform";
+                    platformName.textContent = "[" + message.platform + "] ";
+
+                    const username = document.createElement("span");
+                    username.className = "username";
+                    username.textContent = message.username + ": ";
+
+                    const text = document.createElement("span");
+                    text.className = "text";
+                    text.textContent = message.message;
+
+                    row.append(platformName, username, text);
+                    chat.appendChild(row);
+                }}
+
+                chat.scrollTop = chat.scrollHeight;
+            }}'''}
+
+            updateChat();
+            setInterval(updateChat, 1000);
+        </script>
     </body>
     </html>
-    '''
+    """
 
 flask.run()
