@@ -1,6 +1,7 @@
 from start_bots import start_bots
 from flask import Flask
 from os import getenv
+from html import escape
 import tomllib
 config = tomllib.load(open('/home/justcraft/config.toml', 'rb'))
 flask = Flask(__name__)
@@ -127,80 +128,80 @@ def index():
 
     <h1>Stream Bot</h1>
 
-    <div class="dashboard">
+    <div class='dashboard'>
 
-        <div class="item">
-            <div class="label">Status</div>
-            <div class="value online">● LIVE</div>
+        <div class='item'>
+            <div class='label'>Status</div>
+            <div class='value online'>● LIVE</div>
         </div>
 
-        <div class="item">
-            <div class="label">Viewers</div>
-            <div class="value">42</div>
+        <div class='item'>
+            <div class='label'>Viewers</div>
+            <div class='value'>42</div>
         </div>
 
-        <div class="item">
-            <div class="label">Uptime</div>
-            <div class="value">01:24:37</div>
-        </div>
-
-
-        <div class="item">
-            <div class="label">Twitch</div>
-            <div class="value online">Connected</div>
-        </div>
-
-        <div class="item">
-            <div class="label">YouTube</div>
-            <div class="value online">Connected</div>
-        </div>
-
-        <div class="item">
-            <div class="label">OBS</div>
-            <div class="value online">Connected</div>
+        <div class='item'>
+            <div class='label'>Uptime</div>
+            <div class='value'>01:24:37</div>
         </div>
 
 
-        <div class="item events">
-            <div class="label">Recent Events</div>
+        <div class='item'>
+            <div class='label'>Twitch</div>
+            <div class='value online'>Connected</div>
+        </div>
 
-            <div class="event">
-                <span class="time">12:41</span>
+        <div class='item'>
+            <div class='label'>YouTube</div>
+            <div class='value online'>Connected</div>
+        </div>
+
+        <div class='item'>
+            <div class='label'>OBS</div>
+            <div class='value online'>Connected</div>
+        </div>
+
+
+        <div class='item events'>
+            <div class='label'>Recent Events</div>
+
+            <div class='event'>
+                <span class='time'>12:41</span>
                 viewer123 followed
             </div>
 
-            <div class="event">
-                <span class="time">12:40</span>
+            <div class='event'>
+                <span class='time'>12:40</span>
                 cool_user sent a message
             </div>
 
-            <div class="event">
-                <span class="time">12:38</span>
+            <div class='event'>
+                <span class='time'>12:38</span>
                 Stream started
             </div>
         </div>
 
-        <div class="item">
-            <div class="label">Bot</div>
-            <div class="value online">Running</div>
+        <div class='item'>
+            <div class='label'>Bot</div>
+            <div class='value online'>Running</div>
         </div>
 
 
-        <div class="item">
-            <div class="label">Controls</div>
+        <div class='item'>
+            <div class='label'>Controls</div>
 
             <button>Refresh</button>
             <button>Reload</button>
         </div>
 
-        <div class="item">
-            <div class="label">Spotify</div>
-            <div class="value online">Connected</div>
+        <div class='item'>
+            <div class='label'>Spotify</div>
+            <div class='value online'>Connected</div>
         </div>
 
-        <div class="item">
-            <div class="label">ElevenLabs</div>
-            <div class="value online">Ready</div>
+        <div class='item'>
+            <div class='label'>ElevenLabs</div>
+            <div class='value online'>Ready</div>
         </div>
 
     </div>
@@ -208,15 +209,15 @@ def index():
     <script>
     async function updateDashboard() {
         try {
-            const response = await fetch("/api/main");
+            const response = await fetch('/api/main');
             const data = await response.json();
 
-            document.getElementById("status").textContent = "● " + data.status;
-            document.getElementById("viewers").textContent = data.viewers;
-            document.getElementById("uptime").textContent = data.uptime;
+            document.getElementById('status').textContent = '● ' + data.status;
+            document.getElementById('viewers').textContent = data.viewers;
+            document.getElementById('uptime').textContent = data.uptime;
 
         } catch (error) {
-            console.error("Dashboard update failed:", error);
+            console.error('Dashboard update failed:', error);
         }
     }
 
@@ -233,18 +234,82 @@ def chat_api(platform):
         return {'error': 'Wrong API Platform'}, 404
 @flask.route('/chat/<platform>')
 def chat(platform):
-    if platform not in ['all', 'twitch', 'youtube', 'kick']:
-        return {'error': 'Wrong Chat'}, 404
+    platform = platform.lower()
+
+    if platform == 'all':
+        stream_events = []
+
+        for bot in bots.values():
+            stream_events.extend(bot.stream_events)
+    else:
+        bot = bots.get(platform)
+
+        if bot is None:
+            return 'Unknown platform', 404
+
+        stream_events = bot.stream_events
+
+    messages = []
+
+    for event in stream_events:
+        if event.get('event') != 'message':
+            continue
+
+        username = escape(str(event.get('username', 'Unknown')))
+        message = escape(str(event.get('message', '')))
+        event_platform = escape(str(event.get('platform', platform)))
+
+        messages.append(f'''
+            <div class='message'>
+                <span class='platform'>[{event_platform}]</span>
+                <span class='username'>{username}</span>
+                <span class='text'>{message}</span>
+            </div>
+        ''')
+
     return f'''
     <!DOCTYPE html>
     <html>
-        <body>
-            <h1>{platform.title()} Chat</h1>
-            <div id="messages"></div>
-            <script>
-                // js
-            </script>
-        </body>
+    <head>
+        <title>{platform.title()} Chat</title>
+
+        <style>
+            body {{
+                margin: 0;
+                background: #111;
+                color: white;
+                font-family: Arial, sans-serif;
+            }}
+
+            #chat {{
+                padding: 20px;
+            }}
+
+            .message {{
+                padding: 5px 0;
+            }}
+
+            .platform {{
+                color: #888;
+                margin-right: 6px;
+            }}
+
+            .username {{
+                font-weight: bold;
+                margin-right: 6px;
+            }}
+
+            .text {{
+                color: #ddd;
+            }}
+        </style>
+    </head>
+
+    <body>
+        <div id='chat'>
+            {''.join(messages)}
+        </div>
+    </body>
     </html>
     '''
 

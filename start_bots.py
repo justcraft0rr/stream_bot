@@ -1,4 +1,5 @@
 import bots
+import threading
 def start_bots(**kwargs):
     twitch = bots.TwithBot(
         twitch_refresh_token=kwargs.get('twitch_refresh_token'),
@@ -37,6 +38,10 @@ def start_bots(**kwargs):
         spotify_client_secret=kwargs.get('spotify_client_secret'),
         flask=kwargs.get('flask')
     )
+    threading.Thread(
+        target=twitch.run,
+        daemon=True
+    ).start()
     return {
         'twitch': twitch,
         'kick': kick,
