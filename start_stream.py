@@ -3,6 +3,7 @@ import flask as flask_imported
 from os import getenv
 from html import escape
 import tomllib
+import logging
 config = tomllib.load(open('/home/justcraft/config.toml', 'rb'))
 flask = flask_imported.Flask(__name__)
 stream_events = []
@@ -14,6 +15,8 @@ bots = start_bots(
     twitch_bot=getenv('twitch_bot'),
     kick_client_id=getenv('kick_client_id'),
     kick_client_secret=getenv('kick_client_secret'),
+    kick_broadcaster=getenv('kick_broadcaster'),
+    kick_webhook_url=getenv('kick_webhook_url'),
     youtube_channel=getenv('youtube_channel'),
     obs_host=config['connection']['host'],
     obs_port=config['connection']['port'],
@@ -234,10 +237,27 @@ def chat_api(platform):
 
     if platform == "all":
         stream_events = []
+        seen = set()
 
         for bot in bots.values():
-            if hasattr(bot, "stream_events"):
-                stream_events.extend(bot.stream_events)
+            if not hasattr(bot, "stream_events"):
+                continue
+
+            for event in bot.stream_events:
+                if event.get("event") != "message":
+                    continue
+
+                event_id = (
+                    event.get("platform"),
+                    event.get("username"),
+                    event.get("message")
+                )
+
+                if event_id in seen:
+                    continue
+
+                seen.add(event_id)
+                stream_events.append(event)
     else:
         bot = bots.get(platform)
 
@@ -266,40 +286,40 @@ def chat(platform):
     if platform != "all" and platform not in bots:
         return "Unknown platform", 404
 
-    return f"""
+    return """
     <!DOCTYPE html>
     <html>
     <head>
-        <title>{platform.title()} Chat</title>
+        <title>Chat</title>
 
         <style>
-            html, body {{
+            html, body {
                 margin: 0;
                 background: transparent;
                 color: white;
                 font-family: Arial, sans-serif;
-            }}
+            }
 
-            #chat {{
+            #chat {
                 padding: 10px;
-            }}
+            }
 
-            .message {{
-                font-size: 12px;
+            .message {
+                font-size: 70px;
                 padding: 2px 0;
-            }}
+            }
 
-            .platform {{
+            .platform {
                 color: #888;
-            }}
+            }
 
-            .username {{
+            .username {
                 font-weight: bold;
-            }}
+            }
 
-            .text {{
+            .text {
                 color: #ddd;
-            }}
+            }
         </style>
     </head>
 
@@ -307,16 +327,16 @@ def chat(platform):
         <div id="chat"></div>
 
         <script>
-            const platform = "{platform}";
+            const platform = """ + repr(platform) + """;
             const chat = document.getElementById("chat");
 
-            async function updateChat() {'''{{
+            async function updateChat() {
                 const response = await fetch("/api/chat/" + platform);
                 const messages = await response.json();
 
                 chat.replaceChildren();
 
-                for (const message of messages) {{
+                for (const message of messages) {
                     const row = document.createElement("div");
                     row.className = "message";
 
@@ -334,10 +354,10 @@ def chat(platform):
 
                     row.append(platformName, username, text);
                     chat.appendChild(row);
-                }}
+                }
 
                 chat.scrollTop = chat.scrollHeight;
-            }}'''}
+            }
 
             updateChat();
             setInterval(updateChat, 1000);
@@ -345,5 +365,5 @@ def chat(platform):
     </body>
     </html>
     """
-
-flask.run()
+logging.getLogger('werkzeug').disabled = True
+flask.run(debug=False)

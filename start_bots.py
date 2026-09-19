@@ -18,6 +18,7 @@ def start_bots(**kwargs):
         stream_events=kwargs.get('stream_events', []),
         flask=kwargs.get('flask')
     )
+    kick.authorize()
     youtube = bots.YoutubeBot(
         youtube_channel=kwargs.get('youtube_channel'),
         stream_events=kwargs.get('stream_events', []),
@@ -42,6 +43,7 @@ def start_bots(**kwargs):
         target=twitch.run,
         daemon=True
     ).start()
+    kick.subscribe_events()
     return {
         'twitch': twitch,
         'kick': kick,

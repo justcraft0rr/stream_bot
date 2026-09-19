@@ -12,6 +12,11 @@ from threading import Thread
 import pytchat
 import obsws_python
 import spotipy
+import base64
+import hashlib
+import secrets
+import urllib.parse
+import webbrowser
 try:
     asyncio.get_event_loop()
 except RuntimeError:
@@ -509,12 +514,24 @@ class KickBot:
 
         self.access_token = os.getenv('kick_access_token')
         self.refresh_token = os.getenv('kick_refresh_token')
+        self.oauth_state = None
+        self.oauth_code_verifier = None
+        self.oauth_redirect_uri = os.getenv(
+            'kick_redirect_uri',
+            'http://localhost:5000/kick/oauth/callback'
+        )
 
         self.ready = False
         self.stream_events = self.requirements['stream_events']
         self.connector = '≋'
 
         self.flask = self.requirements['flask']
+
+        self.flask.add_url_rule(
+            '/kick/oauth/callback',
+            'kick_oauth_callback',
+            self.oauth_callback
+        )
 
         self.flask.add_url_rule(
             '/kick/status',
@@ -657,15 +674,78 @@ class KickBot:
         self.broadcaster = self.get_user(
             self.requirements['kick_broadcaster']
         )
+        #self.broadcaster_id = self.broadcaster['id']
+        self.ready = True
+    
+    def authorize(self):
+        self.oauth_state = secrets.token_urlsafe(32)
 
-        if self.broadcaster:
+        self.oauth_code_verifier = secrets.token_urlsafe(64)
 
-            self.broadcaster_id = self.broadcaster.get('user_id')
+        code_challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(
+                self.oauth_code_verifier.encode()
+            ).digest()
+        ).decode().rstrip('=')
 
-            if not self.broadcaster_id:
-                self.broadcaster_id = self.broadcaster.get('id')
+        params = {
+            'response_type': 'code',
+            'client_id': self.requirements['kick_client_id'],
+            'redirect_uri': self.oauth_redirect_uri,
+            'scope': 'user:read channel:read chat:write events:subscribe',
+            'code_challenge': code_challenge,
+            'code_challenge_method': 'S256',
+            'state': self.oauth_state
+        }
 
-            self.ready = True
+        url = (
+            'https://id.kick.com/oauth/authorize?'
+            + urllib.parse.urlencode(params)
+        )
+
+        webbrowser.open(url)
+
+
+    def oauth_callback(self):
+        error = request.args.get('error')
+
+        if error:
+            return f'Kick OAuth failed: {error}', 400
+
+        state = request.args.get('state')
+        code = request.args.get('code')
+
+        if state != self.oauth_state:
+            return 'Invalid OAuth state', 400
+
+        if not code:
+            return 'Missing OAuth code', 400
+
+        response = requests.post(
+            'https://id.kick.com/oauth/token',
+            headers={
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            data={
+                'grant_type': 'authorization_code',
+                'client_id': self.requirements['kick_client_id'],
+                'client_secret': self.requirements['kick_client_secret'],
+                'redirect_uri': self.oauth_redirect_uri,
+                'code_verifier': self.oauth_code_verifier,
+                'code': code
+            }
+        )
+
+        if not response.ok:
+            return f'Kick token request failed: {response.text}', 400
+
+        tokens = response.json()
+
+        self.access_token = tokens['access_token']
+        self.refresh_token = tokens['refresh_token']
+        self.save_tokens()
+
+        return 'Kick authorization successful! You can close this page.'
 
     def request(self, method, endpoint, **kwargs):
 
@@ -750,16 +830,9 @@ class KickBot:
             file.write('\n'.join(lines) + '\n')
 
     def get_user(self, username=None):
-
-        params = {}
-
-        if username:
-            params['username'] = username
-
         response = self.request(
             'GET',
-            'users',
-            params=params
+            'users'
         )
 
         if not response.ok:
@@ -768,6 +841,13 @@ class KickBot:
         data = response.json().get('data')
 
         if not data:
+            return None
+
+        if username:
+            for user in data:
+                if user.get('name') == username:
+                    return user
+
             return None
 
         return data[0]
@@ -1070,6 +1150,17 @@ class KickBot:
 
     def subscribe_events(self):
 
+        broadcaster = self.get_user(
+            self.requirements['kick_broadcaster']
+        )
+
+        if broadcaster is None:
+            raise Exception(
+                f"Could not find Kick broadcaster: "
+                f"{self.requirements['kick_broadcaster']}"
+            )
+
+        self.broadcaster_id = broadcaster['user_id']
         events = [
             'chat.message.sent',
             'channel.followed',
@@ -1133,7 +1224,6 @@ class KickBot:
         return response.ok
 
     def webhook(self):
-
         event_type = request.headers.get('Kick-Event-Type')
         event = request.get_json(silent=True) or {}
 
@@ -1149,6 +1239,7 @@ class KickBot:
                 'message': event.get('content'),
                 'message_id': event.get('message_id')
             })
+            print(f'[Kick] {sender.get('username')}: {event.get('content')}')
 
         elif event_type == 'channel.followed':
 
