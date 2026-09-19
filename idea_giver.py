@@ -1,5 +1,5 @@
 import random
-from utils import sb
+from flask_client import FlaskClient
 ideas = [
     "Flappy Bird",
     "Multiplayer Dodge Arena",
@@ -13,11 +13,7 @@ ideas = [
     "Sword Duel",
 ]
 line1 = "Justcraft has to make a "
-
+flask_client = FlaskClient()
 
 def give_idea():
-    sb.global_message(
-        "bot",
-        f"{line1}{ideas[random.randrange(1, len(ideas))]} Game",
-        "orange",
-    )
+    FlaskClient.Twitch.send_message(f'{line1}{random.choice(ideas)} Game')

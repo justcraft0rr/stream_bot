@@ -1,5 +1,6 @@
 import socket
 import json
+import time
 
 
 class GeometryDash:
@@ -21,11 +22,12 @@ class GeometryDash:
                 (json.dumps(message) + "\n").encode()
             )
 
-            return sock.recv(4096).decode().strip()
+            response = sock.recv(4096).decode().strip()
+        print("RAW RESPONSE:", repr(response))
+        if response == 'OK':
+            return {'ok': True}
 
-    # -------------------------
-    # Game controls
-    # -------------------------
+        return json.loads(response)
 
     def show_message(self, text):
         return self.send("show_message", text)
@@ -45,36 +47,52 @@ class GeometryDash:
     def crash(self):
         return self.send("crash")
 
-    # -------------------------
-    # Level information
-    # -------------------------
-
     def get_level_id(self):
         response = self.send("get_level_id")
 
-        try:
-            return int(response)
-        except ValueError:
+        if not response.get("ok"):
             return None
 
-    # -------------------------
-    # Request queue
-    # -------------------------
+        return response.get("level_id")
 
     def add_level_id(self, level_id, user):
-        return self.send("add_level_id", level_id, user)
+        return self.send(
+            "add_level_id",
+            level_id,
+            user
+        )
 
     def get_requested_ids(self):
-        return self.send("get_requested_ids")
+        response = self.send("get_requested_ids")
+
+        if not response.get("ok"):
+            return []
+
+        return response.get("queue", [])
 
     def get_current_requested_id(self):
-        return self.send("get_current_requested_id")
+        response = self.send(
+            "get_current_requested_id"
+        )
+
+        if not response.get("ok"):
+            return None
+
+        return response.get("queue")
 
     def next_requested_id(self):
-        return self.send("next_requested_id")
+        return self.send(
+            "next_requested_id"
+        )
 
     def remove_current_requested_id(self):
-        return self.send("remove_current_requested_id")
+        return self.send(
+            "remove_current_requested_id"
+        )
 
     def clear_queue(self):
-        return self.send("clear_queue")
+        return self.send(
+            "clear_queue"
+        )
+
+gd = GeometryDash()

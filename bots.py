@@ -2,10 +2,6 @@ import requests
 import asyncio
 import os
 import re
-import secrets
-import hashlib
-import base64
-import urllib.parse
 import json
 from datetime import datetime
 from twitchio.ext import commands, eventsub
@@ -211,11 +207,11 @@ class TwithBot(commands.Bot):
         self,
         event: eventsub.ChannelFollowData
     ):
-        self.stream_events[self.stream_events['stream_id']+1] = {'event': 'follow', 'username': event.user.name}
+        self.stream_events[self.stream_events['stream_id']+1] = {'event': 'follow', 'platform': 'twitch', 'username': event.user.name}
         self.stream_events['stream_id'] += 1
     
     def event_message(self, message):
-        self.stream_events[self.stream_events['stream_id']+1] = {'event': 'message', 'username': message.author.name, 'message': message.content}
+        self.stream_events[self.stream_events['stream_id']+1] = {'event': 'message', 'platform': 'twitch', 'username': message.author.name, 'message': message.content}
         self.stream_events['stream_id'] += 1
         print(f'[Twitch] {message.author.name}: {message.content}')
     
@@ -1142,6 +1138,7 @@ class KickBot:
 
             self.stream_events[self.stream_events['stream_id'] + 1] = {
                 'event': 'message',
+                'platform': 'kick',
                 'username': sender.get('username'),
                 'user_id': sender.get('user_id'),
                 'message': event.get('content'),
@@ -1156,6 +1153,7 @@ class KickBot:
 
             self.stream_events[self.stream_events['stream_id'] + 1] = {
                 'event': 'follow',
+                'platform': 'kick',
                 'username': follower.get('username'),
                 'user_id': follower.get('user_id')
             }
@@ -1168,6 +1166,7 @@ class KickBot:
 
             self.stream_events[self.stream_events['stream_id'] + 1] = {
                 'event': 'subscription',
+                'platform': 'kick',
                 'username': subscriber.get('username'),
                 'user_id': subscriber.get('user_id'),
                 'duration': event.get('duration')
@@ -1181,6 +1180,7 @@ class KickBot:
 
             self.stream_events[self.stream_events['stream_id'] + 1] = {
                 'event': 'subscription_renewal',
+                'platform': 'kick',
                 'username': subscriber.get('username'),
                 'user_id': subscriber.get('user_id'),
                 'duration': event.get('duration')
@@ -1194,6 +1194,7 @@ class KickBot:
 
             self.stream_events[self.stream_events['stream_id'] + 1] = {
                 'event': 'subscription_gift',
+                'platform': 'kick',
                 'username': gifter.get('username'),
                 'user_id': gifter.get('user_id'),
                 'giftees': event.get('giftees', [])
@@ -1207,6 +1208,7 @@ class KickBot:
 
             self.stream_events[self.stream_events['stream_id'] + 1] = {
                 'event': 'reward_redemption',
+                'platform': 'kick',
                 'username': redeemer.get('username'),
                 'user_id': redeemer.get('user_id'),
                 'reward': event.get('reward'),
@@ -1220,6 +1222,7 @@ class KickBot:
 
             self.stream_events[self.stream_events['stream_id'] + 1] = {
                 'event': 'live',
+                'platform': 'kick',
                 'live': event.get('is_live'),
                 'title': event.get('title'),
                 'started_at': event.get('started_at'),
@@ -1234,6 +1237,7 @@ class KickBot:
 
             self.stream_events[self.stream_events['stream_id'] + 1] = {
                 'event': 'stream_metadata',
+                'platform': 'kick',
                 'title': metadata.get('title'),
                 'language': metadata.get('language'),
                 'has_mature_content': metadata.get('has_mature_content'),
@@ -1249,6 +1253,7 @@ class KickBot:
 
             self.stream_events[self.stream_events['stream_id'] + 1] = {
                 'event': 'ban',
+                'platform': 'kick',
                 'username': banned_user.get('username'),
                 'user_id': banned_user.get('user_id'),
                 'reason': metadata.get('reason'),
@@ -1264,6 +1269,7 @@ class KickBot:
 
             self.stream_events[self.stream_events['stream_id'] + 1] = {
                 'event': 'kicks',
+                'platform': 'kick',
                 'username': sender.get('username'),
                 'user_id': sender.get('user_id'),
                 'amount': gift.get('amount'),
@@ -1575,7 +1581,6 @@ class YoutubeBot:
             daemon=True
         ).start()
         self.stream_events = {}
-        self.stream_events['stream_id'] = 0
         self.flask = self.requirements['flask']
     
     def get_stream(self):
@@ -1605,6 +1610,7 @@ class YoutubeBot:
             for message in self.chat.get().sync_items():
                 self.stream_events[self.stream_events['stream_id']+1] = {
                     'event': 'message',
+                    'platform': 'youtube',
                     'username': message.author.name,
                     'message': message.message
                 }
