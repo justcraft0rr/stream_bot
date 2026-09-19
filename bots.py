@@ -207,12 +207,10 @@ class TwithBot(commands.Bot):
         self,
         event: eventsub.ChannelFollowData
     ):
-        self.stream_events[self.stream_events['stream_id']+1] = {'event': 'follow', 'platform': 'twitch', 'username': event.user.name}
-        self.stream_events['stream_id'] += 1
+        self.stream_events.append({'event': 'follow', 'platform': 'twitch', 'username': event.user.name})
     
     def event_message(self, message):
-        self.stream_events[self.stream_events['stream_id']+1] = {'event': 'message', 'platform': 'twitch', 'username': message.author.name, 'message': message.content}
-        self.stream_events['stream_id'] += 1
+        self.stream_events.append({'event': 'message', 'platform': 'twitch', 'username': message.author.name, 'message': message.content})
         print(f'[Twitch] {message.author.name}: {message.content}')
     
     async def is_live(self):
@@ -1136,77 +1134,67 @@ class KickBot:
 
             sender = event.get('sender', {})
 
-            self.stream_events[self.stream_events['stream_id'] + 1] = {
+            self.stream_events.append({
                 'event': 'message',
                 'platform': 'kick',
                 'username': sender.get('username'),
                 'user_id': sender.get('user_id'),
                 'message': event.get('content'),
                 'message_id': event.get('message_id')
-            }
-
-            self.stream_events['stream_id'] += 1
+            })
 
         elif event_type == 'channel.followed':
 
             follower = event.get('follower', {})
 
-            self.stream_events[self.stream_events['stream_id'] + 1] = {
+            self.stream_events.append({
                 'event': 'follow',
                 'platform': 'kick',
                 'username': follower.get('username'),
                 'user_id': follower.get('user_id')
-            }
-
-            self.stream_events['stream_id'] += 1
+            })
 
         elif event_type == 'channel.subscription.new':
 
             subscriber = event.get('subscriber', {})
 
-            self.stream_events[self.stream_events['stream_id'] + 1] = {
+            self.stream_events.append({
                 'event': 'subscription',
                 'platform': 'kick',
                 'username': subscriber.get('username'),
                 'user_id': subscriber.get('user_id'),
                 'duration': event.get('duration')
-            }
-
-            self.stream_events['stream_id'] += 1
+            })
 
         elif event_type == 'channel.subscription.renewal':
 
             subscriber = event.get('subscriber', {})
 
-            self.stream_events[self.stream_events['stream_id'] + 1] = {
+            self.stream_events.append({
                 'event': 'subscription_renewal',
                 'platform': 'kick',
                 'username': subscriber.get('username'),
                 'user_id': subscriber.get('user_id'),
                 'duration': event.get('duration')
-            }
-
-            self.stream_events['stream_id'] += 1
+            })
 
         elif event_type == 'channel.subscription.gifts':
 
             gifter = event.get('gifter', {})
 
-            self.stream_events[self.stream_events['stream_id'] + 1] = {
+            self.stream_events.append({
                 'event': 'subscription_gift',
                 'platform': 'kick',
                 'username': gifter.get('username'),
                 'user_id': gifter.get('user_id'),
                 'giftees': event.get('giftees', [])
-            }
-
-            self.stream_events['stream_id'] += 1
+            })
 
         elif event_type == 'channel.reward.redemption.updated':
 
             redeemer = event.get('redeemer', {})
 
-            self.stream_events[self.stream_events['stream_id'] + 1] = {
+            self.stream_events.append({
                 'event': 'reward_redemption',
                 'platform': 'kick',
                 'username': redeemer.get('username'),
@@ -1214,60 +1202,52 @@ class KickBot:
                 'reward': event.get('reward'),
                 'status': event.get('status'),
                 'user_input': event.get('user_input')
-            }
-
-            self.stream_events['stream_id'] += 1
+            })
 
         elif event_type == 'livestream.status.updated':
 
-            self.stream_events[self.stream_events['stream_id'] + 1] = {
+            self.stream_events.append({
                 'event': 'live',
                 'platform': 'kick',
                 'live': event.get('is_live'),
                 'title': event.get('title'),
                 'started_at': event.get('started_at'),
                 'ended_at': event.get('ended_at')
-            }
-
-            self.stream_events['stream_id'] += 1
+            })
 
         elif event_type == 'livestream.metadata.updated':
 
             metadata = event.get('metadata', {})
 
-            self.stream_events[self.stream_events['stream_id'] + 1] = {
+            self.stream_events.append({
                 'event': 'stream_metadata',
                 'platform': 'kick',
                 'title': metadata.get('title'),
                 'language': metadata.get('language'),
                 'has_mature_content': metadata.get('has_mature_content'),
                 'category': metadata.get('category')
-            }
-
-            self.stream_events['stream_id'] += 1
+            })
 
         elif event_type == 'moderation.banned':
 
             banned_user = event.get('banned_user', {})
             metadata = event.get('metadata', {})
 
-            self.stream_events[self.stream_events['stream_id'] + 1] = {
+            self.stream_events.append({
                 'event': 'ban',
                 'platform': 'kick',
                 'username': banned_user.get('username'),
                 'user_id': banned_user.get('user_id'),
                 'reason': metadata.get('reason'),
                 'expires_at': metadata.get('expires_at')
-            }
-
-            self.stream_events['stream_id'] += 1
+            })
 
         elif event_type == 'kicks.gifted':
 
             sender = event.get('sender', {})
             gift = event.get('gift', {})
 
-            self.stream_events[self.stream_events['stream_id'] + 1] = {
+            self.stream_events.append({
                 'event': 'kicks',
                 'platform': 'kick',
                 'username': sender.get('username'),
@@ -1277,9 +1257,7 @@ class KickBot:
                 'type': gift.get('type'),
                 'tier': gift.get('tier'),
                 'message': gift.get('message')
-            }
-
-            self.stream_events['stream_id'] += 1
+            })
 
         return '', 200
 
@@ -1568,6 +1546,7 @@ class YoutubeBot:
     def __init__(self, **kwargs):
         self.requirements = {
             'youtube_channel': kwargs.get('youtube_channel'),
+            'stream_events': kwargs.get('stream_events'),
             'flask': kwargs.get('flask')
         }
         if self.get_stream():
@@ -1580,7 +1559,7 @@ class YoutubeBot:
             target=lambda: asyncio.run(self.live_handle()),
             daemon=True
         ).start()
-        self.stream_events = {}
+        self.stream_events = self.requirements['stream_events']
         self.flask = self.requirements['flask']
     
     def get_stream(self):
@@ -1608,13 +1587,12 @@ class YoutubeBot:
     async def live_handle(self):
         while self.chat and self.chat.is_alive():
             for message in self.chat.get().sync_items():
-                self.stream_events[self.stream_events['stream_id']+1] = {
+                self.stream_events.append({
                     'event': 'message',
                     'platform': 'youtube',
                     'username': message.author.name,
                     'message': message.message
-                }
-                self.stream_events['stream_id'] += 1
+                })
 
             await asyncio.sleep(1)
 
