@@ -222,8 +222,13 @@ class TwithBot(commands.Bot):
         self.stream_events.append({'event': 'follow', 'platform': 'twitch', 'username': event.user.name})
     
     async def event_message(self, message):
-        self.stream_events.append({'event': 'message', 'platform': 'twitch', 'username': message.author.name, 'message': message.content})
-        print(f'[Twitch] {message.author.name}: {message.content}')
+        username = (
+            message.author.name
+            if message.author
+            else self.requirements['twitch_bot']
+        )
+        self.stream_events.append({'event': 'message', 'platform': 'twitch', 'username': username, 'message': message.content})
+        print(f'[Twitch] {username}: {message.content}')
     
     async def is_live(self):
         streams = await self.fetch_streams(
@@ -243,13 +248,21 @@ class TwithBot(commands.Bot):
         return streams[0]
     
     def send_message(self, message):
-        channel = self.get_channel(self.requirements['twitch_broadcaster'])
 
-        if channel:
-            asyncio.run_coroutine_threadsafe(
-                channel.send(message),
-                self.loop
+        async def send():
+
+            channel = self.get_channel(
+                self.requirements['twitch_broadcaster']
             )
+
+
+            if channel:
+                await channel.send(message)
+
+        asyncio.run_coroutine_threadsafe(
+            send(),
+            self.loop
+        )
     
     async def live_handle(self):
         old_state = await self.is_live()
@@ -279,10 +292,15 @@ class TwithBot(commands.Bot):
     async def get_user(self, username):
         return await self.fetch_user(username)
     
-    async def get_channel(self):
-        return await self.fetch_channel(
+    async def get_twitch_channel(self):
+
+
+        channel = await self.fetch_channel(
             self.requirements['twitch_broadcaster']
         )
+
+
+        return channel
     
     async def ban(self, username, reason=None):
         user = await self.get_user(username)

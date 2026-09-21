@@ -315,6 +315,7 @@ def chat(platform):
 
             .username {
                 font-weight: bold;
+                color: orange;
             }
 
             .text {
@@ -365,5 +366,223 @@ def chat(platform):
     </body>
     </html>
     """
+@flask.route('/user/chat/')
+def user_chat():
+    return '''
+        <!DOCTYPE html>
+        <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>User Chat</title>
+                <style>
+                    body {
+                        margin: 0;
+                        min-height: 400px;
+                        background-color: gray;
+                    }
+                    ul, li {
+                        list-style: none;
+                        margin: 0;
+                        padding: 0;
+                    }
+                    .send_message {
+                        position: absolute;
+                        bottom: 5px;
+                        left: 5px;
+                        right: 5px;
+                        width: calc(100% - 10px);
+                    }
+                    ul {
+                        display: flex;
+                        width: 100%;
+                        gap: 10px;
+                    }
+                    li {
+                        padding: 0;
+                    }
+                    .message-input {
+                        flex: 1;
+                    }
+                    .message-input input {
+                        box-sizing: border-box;
+                        width: 100%;
+                    }
+                    #chat {
+                        padding: 10px;
+                    }
+                    .message {
+                        font-size: 32px;
+                        padding: 2px 0;
+                    }
+                    .platform {
+                        color: #888;
+                    }
+                    .username {
+                        font-weight: bold;
+                        color: orange;
+                    }
+                    .text {
+                        color: #ddd;
+                    }
+                </style>
+            </head>
+
+            <body>
+                <div class="send_message">
+                    <ul>
+                        <li>
+                            <div class="platform-selector">
+                                <select name="platform" id="platform">
+                                    <option value="all">All Platforms</option>
+                                    <option value="twitch">Twitch</option>
+                                    <option value="kick">Kick</option>
+                                    <!-- <option value="youtube">Youtube</option> -->
+                                </select>
+                            </div>
+                        </li>
+                        <li class="message-input">
+                            <input
+                                type="text"
+                                id="message"
+                                name="message"
+                                placeholder="Message..."
+                            >
+                        </li>
+                        <li>
+                            <button type="button" id="send">Send</button>
+                        </li>
+                    </ul>
+                </div>
+                <div id="chat"></div>
+                <script>
+                    const platform = "all";
+                    const chat = document.getElementById("chat");
+
+                    async function updateChat() {
+                        const response = await fetch("/api/chat/" + platform);
+                        const messages = await response.json();
+
+                        chat.replaceChildren();
+
+                        for (const message of messages) {
+                            const row = document.createElement("div");
+                            row.className = "message";
+
+                            const platformName = document.createElement("span");
+                            platformName.className = "platform";
+                            platformName.textContent = "[" + message.platform + "] ";
+
+                            const username = document.createElement("span");
+                            username.className = "username";
+                            username.textContent = message.username + ": ";
+
+                            const text = document.createElement("span");
+                            text.className = "text";
+                            text.textContent = message.message;
+
+                            row.append(platformName, username, text);
+                            chat.appendChild(row);
+                        }
+
+                        chat.scrollTop = chat.scrollHeight;
+                    }
+
+                    updateChat();
+                    setInterval(updateChat, 1000);
+                </script>
+                <script>
+                    const sendPlatform = document.getElementById("platform");
+                    const sendMessageInput = document.getElementById("message");
+                    const sendButton = document.getElementById("send");
+
+                    async function sendChatMessage() {
+                        const text = sendMessageInput.value.trim();
+
+                        console.log("Sending:", {
+                            platform: sendPlatform.value,
+                            message: text
+                        });
+
+                        if (!text) {
+                            return;
+                        }
+
+                        try {
+                            const response = await fetch("/api/chat/send_message", {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json"
+                                },
+                                body: JSON.stringify({
+                                    platform: sendPlatform.value,
+                                    message: text
+                                })
+                            });
+
+                            console.log("Status:", response.status);
+
+                            const data = await response.json();
+
+                            console.log("Response:", data);
+
+                            if (data.success) {
+                                sendMessageInput.value = "";
+                            }
+
+                        } catch (error) {
+                            console.error("Fetch error:", error);
+                        }
+                    }
+
+                    sendButton.addEventListener("click", sendChatMessage);
+
+                    sendMessageInput.addEventListener("keydown", function(event) {
+                        if (event.key === "Enter") {
+                            sendChatMessage();
+                        }
+                    });
+                </script>
+            </body>
+        </html>
+    '''
+@flask.route('/api/chat/send_message', methods=['POST'])
+def send_chat_message():
+    data = flask_imported.request.get_json()
+
+    platform = data.get('platform')
+    message = data.get('message')
+
+    if not platform or not message:
+        return flask_imported.jsonify({
+            'success': False,
+            'error': 'Missing platform or message'
+        }), 400
+
+    platform = platform.lower()
+
+    if platform == 'all':
+        for platform, bot in bots.items():
+            if platform in [
+                'twitch',
+                #'youtube',
+                'kick'
+            ]:
+                bot.send_message(message)
+
+    else:
+        bot = bots.get(platform)
+
+        if not bot:
+            return flask_imported.jsonify({
+                'success': False,
+                'error': f'{platform} bot not found'
+            }), 404
+
+        bot.send_message(message)
+
+    return flask_imported.jsonify({
+        'success': True
+    })
 logging.getLogger('werkzeug').disabled = True
 flask.run(debug=False)
