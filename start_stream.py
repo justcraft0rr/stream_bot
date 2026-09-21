@@ -302,6 +302,12 @@ def chat(platform):
 
             #chat {
                 padding: 10px;
+                padding-bottom: 0;
+                height: calc(100vh - 80px);
+                overflow-y: auto;
+            }
+            #chat::-webkit-scrollbar {
+                display: none;
             }
 
             .message {
@@ -321,15 +327,23 @@ def chat(platform):
             .text {
                 color: #ddd;
             }
+
+            .platform-icon {
+                width: 60px;
+                height: 60px;
+                vertical-align: middle;
+                margin-right: 5px;
+            }
         </style>
     </head>
 
     <body>
-        <div id="chat"></div>
+        <div id="chat"><div id="chat-bottom"></div></div>
 
         <script>
             const platform = """ + repr(platform) + """;
             const chat = document.getElementById("chat");
+            const chatBottom = document.getElementById("chat-bottom");
 
             async function updateChat() {
                 const response = await fetch("/api/chat/" + platform);
@@ -341,9 +355,20 @@ def chat(platform):
                     const row = document.createElement("div");
                     row.className = "message";
 
-                    const platformName = document.createElement("span");
-                    platformName.className = "platform";
-                    platformName.textContent = "[" + message.platform + "] ";
+                    const platformIcon = document.createElement("img");
+                    platformIcon.className = "platform-icon";
+
+                    if (message.platform === "twitch") {
+                        platformIcon.src = "/static/icons/twitch.png";
+                    } else if (message.platform === "kick") {
+                        platformIcon.src = "/static/icons/kick.png";
+                    } else if (message.platform === "youtube") {
+                        platformIcon.src = "/static/icons/youtube.png";
+                    }
+
+                    const spacing = document.createElement("span");
+                    spacing.className = "spacing";
+                    spacing.textContent = " ";
 
                     const username = document.createElement("span");
                     username.className = "username";
@@ -353,10 +378,9 @@ def chat(platform):
                     text.className = "text";
                     text.textContent = message.message;
 
-                    row.append(platformName, username, text);
+                    row.append(platformIcon, spacing, username, text);
                     chat.appendChild(row);
                 }
-
                 chat.scrollTop = chat.scrollHeight;
             }
 
@@ -425,6 +449,12 @@ def user_chat():
                     .text {
                         color: #ddd;
                     }
+                    .platform-icon {
+                        width: 22px;
+                        height: 22px;
+                        vertical-align: middle;
+                        margin-right: 5px;
+                    }
                 </style>
             </head>
 
@@ -469,9 +499,20 @@ def user_chat():
                             const row = document.createElement("div");
                             row.className = "message";
 
-                            const platformName = document.createElement("span");
-                            platformName.className = "platform";
-                            platformName.textContent = "[" + message.platform + "] ";
+                            const platformIcon = document.createElement("img");
+                            platformIcon.className = "platform-icon";
+
+                            if (message.platform === "twitch") {
+                                platformIcon.src = "/static/icons/twitch.png";
+                            } else if (message.platform === "kick") {
+                                platformIcon.src = "/static/icons/kick.png";
+                            } else if (message.platform === "youtube") {
+                                platformIcon.src = "/static/icons/youtube.png";
+                            }
+
+                            const spacing = document.createElement("span");
+                            spacing.className = "spacing";
+                            spacing.textContent = " ";
 
                             const username = document.createElement("span");
                             username.className = "username";
@@ -481,7 +522,7 @@ def user_chat():
                             text.className = "text";
                             text.textContent = message.message;
 
-                            row.append(platformName, username, text);
+                            row.append(platformIcon, spacing, username, text);
                             chat.appendChild(row);
                         }
 
